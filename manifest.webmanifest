@@ -1,0 +1,33 @@
+{
+    "name": "MANNA Platform",
+    "short_name": "MANNA",
+    "description": "MANNA marketplace for customer orders, restaurant management, delivery tracking, and admin oversight.",
+    "lang": "en-US",
+    "start_url": "./index.html",
+    "scope": "./",
+    "display": "standalone",
+    "background_color": "#0d2045",
+    "theme_color": "#0d2045",
+    "icons": [
+        {
+            "src": "./images/logo/logo.png",
+            "sizes": "48x48",
+            "type": "image/png"
+        },
+        {
+            "src": "./images/logo/logo.png",
+            "sizes": "96x96",
+            "type": "image/png"
+        },
+        {
+            "src": "./images/logo/logo.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "./images/logo/logo.png",
+            "sizes": "200x200",
+            "type": "image/png"
+        }
+    ]
+}

@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MANNA Restaurant • Seller Dashboard</title>
+    <meta name="theme-color" content="#132a44" />
+    <meta name="description"
+        content="MANNA restaurant dashboard for managing menus, orders, and customer interactions." />
+    <link rel="shortcut icon" href="./favicon.ico" type="image/x-icon" />
+    <link rel="icon" href="./images/logo/logo.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./images/logo/logo.png" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="stylesheet" href="./style.css" />
+    <link rel="stylesheet" href="./restaurant.css" />
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
+</head>
+
+<body>
+    <div id="onboardingOverlay" class="onboarding-overlay hidden" aria-hidden="true">
+        <div class="onboarding-card">
+            <h2>Welcome, Restaurant Partner</h2>
+            <p>MANNA helps you manage menus, orders, payments, and support from one dashboard.</p>
+            <ul>
+                <li>Update your restaurant profile and images</li>
+                <li>Manage menu items and promotions</li>
+                <li>Track incoming deliveries and customer feedback</li>
+            </ul>
+            <button id="closeOnboarding" class="primary-btn">Let’s go</button>
+        </div>
+    </div>
+    <div id="authScreen" class="auth-screen">
+        <div class="auth-card">
+            <div class="auth-brand">
+                <img src="./images/logo/logo.svg" alt="MANNA logo" class="brand-logo" />
+                <div>
+                    <h1>MANNA</h1>
+                    <p>Restaurant Control Panel</p>
+                </div>
+            </div>
+            <form id="loginForm" class="auth-form">
+                <label>
+                    Email
+                    <input type="email" id="loginEmail" required placeholder="restaurant@example.com" />
+                </label>
+                <label>
+                    Password
+                    <input type="password" id="loginPassword" required placeholder="Your password" />
+                </label>
+                <button type="submit" id="loginButton">Sign In</button>
+                <button type="button" id="showRegisterButton" class="ghost-btn">Create a restaurant account</button>
+                <button type="button" id="forgotPasswordButton" class="text-btn">Forgot password?</button>
+            </form>
+
+            <form id="registerForm" class="auth-form hidden">
+                <label>
+                    Restaurant Name
+                    <input type="text" id="registerBusinessName" required placeholder="Manna Kitchen" />
+                </label>
+                <label>
+                    Owner Name
+                    <input type="text" id="registerOwnerName" required placeholder="John Doe" />
+                </label>
+                <label>
+                    Phone
+                    <input type="tel" id="registerPhone" required placeholder="0770123456" />
+                </label>
+                <label>
+                    Email
+                    <input type="email" id="registerEmail" required placeholder="restaurant@example.com" />
+                </label>
+                <label>
+                    Password
+                    <input type="password" id="registerPassword" required placeholder="Create a password" />
+                </label>
+                <label>
+                    Confirm Password
+                    <input type="password" id="registerConfirmPassword" required placeholder="Re-enter password" />
+                </label>
+                <button type="submit" id="registerButton">Create Account</button>
+                <button type="button" id="showLoginButton" class="ghost-btn">Already have an account?</button>
+            </form>
+
+            <div id="authMessage" class="auth-message"></div>
+        </div>
+    </div>
+
+    <div id="appShell" class="app-shell hidden">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <img src="./images/logo/logo.svg" alt="MANNA logo" class="brand-logo" />
+                <div>
+                    <h2>MANNA</h2>
+                    <p>Restaurant</p>
+                </div>
+            </div>
+            <nav class="nav-links" aria-label="Restaurant navigation">
+                <button class="nav-item active" data-section="dashboard"><span class="nav-icon"><svg viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M4 10.5L12 4l8 6.5" />
+                            <path d="M6.5 10.5V20h11V10.5" />
+                        </svg></span><span>Dashboard</span></button>
+                <button class="nav-item" data-section="profile"><span class="nav-icon"><svg viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M12 12a4 4 0 100-8 4 4 0 000 8z" />
+                            <path d="M4 20a8 8 0 0116 0" />
+                        </svg></span><span>Profile</span></button>
+                <button class="nav-item" data-section="catalog"><span class="nav-icon"><svg viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M4 7l8-3 8 3v10l-8 3-8-3z" />
+                            <path d="M4 7l8 3 8-3" />
+                            <path d="M12 10v11" />
+                        </svg></span><span>Catalog</span></button>
+                <button class="nav-item" data-section="menu"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="1.8">
+                            <rect x="4" y="4" width="16" height="16" rx="2" />
+                            <path d="M8 8h8M8 12h8M8 16h5" />
+                        </svg></span><span>Menu</span></button>
+                <button class="nav-item" data-section="orders"><span class="nav-icon"><svg viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M7 4h10l2 2v13l-2 2H7l-2-2V6l2-2z" />
+                            <path d="M9 8h6M9 12h6M9 16h4" />
+                        </svg></span><span>Orders</span></button>
+                <button class="nav-item" data-section="reviews"><span class="nav-icon"><svg viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M5 6h14v8H8l-3 3V6z" />
+                            <path d="M8 10h8" />
+                            <path d="M8 13h5" />
+                        </svg></span><span>Reviews</span></button>
+                <button class="nav-item" data-section="promotions"><span class="nav-icon"><svg viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M6 3h12v6l-2 2 2 2v6H6v-6l2-2-2-2z" />
+                        </svg></span><span>Promotions</span></button>
+                <button class="nav-item" data-section="coupons"><span class="nav-icon"><svg viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M5 7h14v3a2 2 0 00-2 2 2 2 0 002 2v3H5v-3a2 2 0 002-2 2 2 0 00-2-2z" />
+                        </svg></span><span>Coupons</span></button>
+                <button class="nav-item" data-section="analytics"><span class="nav-icon"><svg viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M5 19V9" />
+                            <path d="M12 19V5" />
+                            <path d="M19 19v-7" />
+                        </svg></span><span>Analytics</span></button>
+                <button class="nav-item" data-section="notifications"><span class="nav-icon"><svg viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M12 4a5 5 0 00-5 5v3l-1 2h12l-1-2V9a5 5 0 00-5-5z" />
+                            <path d="M10 18a2 2 0 104 0" />
+                        </svg></span><span>Notifications</span></button>
+                <button class="nav-item" data-section="settings"><span class="nav-icon"><svg viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" stroke-width="1.8">
+                            <circle cx="12" cy="12" r="3" />
+                            <path
+                                d="M19 12a7 7 0 00-.1-1l2.2-1.7-2-3.5-2.7 1.1a7 7 0 00-1.7-1L14 3h-4l-.7 2.9a7 7 0 00-1.7 1L4.9 5.8l-2 3.5 2.2 1.7a7 7 0 000 2l-2.2 1.7 2 3.5 2.7-1.1a7 7 0 001.7 1L10 21h4l.7-2.9a7 7 0 001.7-1l2.7 1.1 2-3.5-2.2-1.7c.1-.3.1-.7.1-1z" />
+                        </svg></span><span>Settings</span></button>
+                <button class="nav-item" data-section="chat"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="1.8">
+                            <path d="M5 6h14v8H8l-3 3V6z" />
+                            <path d="M8 10h8" />
+                            <path d="M8 13h5" />
+                        </svg></span><span>Chat</span></button>
+            </nav>
+            <div class="sidebar-footer">
+                <button id="logoutButton" class="secondary-btn">Logout</button>
+            </div>
+        </aside>
+
+        <div class="mobile-nav-sheet" id="mobileNavSheet" aria-hidden="true">
+            <div class="mobile-nav-sheet__panel">
+                <div class="mobile-nav-sheet__header">
+                    <div class="brand-block">
+                        <img src="./images/logo/logo.svg" alt="MANNA logo" class="brand-logo" />
+                        <div>
+                            <h3>MANNA</h3>
+                            <p>Restaurant</p>
+                        </div>
+                    </div>
+                    <button class="icon-btn" id="mobileNavClose" aria-label="Close menu"><svg viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M6 6l12 12M18 6L6 18" />
+                        </svg></button>
+                </div>
+                <nav class="mobile-nav-list" aria-label="Mobile restaurant navigation">
+                    <button class="nav-item mobile-nav-item active" data-section="dashboard"><span class="nav-icon"><svg
+                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                <path d="M4 10.5L12 4l8 6.5" />
+                                <path d="M6.5 10.5V20h11V10.5" />
+                            </svg></span><span>Dashboard</span></button>
+                    <button class="nav-item mobile-nav-item" data-section="orders"><span class="nav-icon"><svg
+                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                <path d="M7 4h10l2 2v13l-2 2H7l-2-2V6l2-2z" />
+                                <path d="M9 8h6M9 12h6M9 16h4" />
+                            </svg></span><span>Orders</span></button>
+                    <button class="nav-item mobile-nav-item" data-section="menu"><span class="nav-icon"><svg
+                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                <rect x="4" y="4" width="16" height="16" rx="2" />
+                                <path d="M8 8h8M8 12h8M8 16h5" />
+                            </svg></span><span>Menu</span></button>
+                    <button class="nav-item mobile-nav-item" data-section="notifications"><span class="nav-icon"><svg
+                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                <path d="M12 4a5 5 0 00-5 5v3l-1 2h12l-1-2V9a5 5 0 00-5-5z" />
+                                <path d="M10 18a2 2 0 104 0" />
+                            </svg></span><span>Notifications</span></button>
+                    <button class="nav-item mobile-nav-item" data-section="settings"><span class="nav-icon"><svg
+                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                <circle cx="12" cy="12" r="3" />
+                                <path
+                                    d="M19 12a7 7 0 00-.1-1l2.2-1.7-2-3.5-2.7 1.1a7 7 0 00-1.7-1L14 3h-4l-.7 2.9a7 7 0 00-1.7 1L4.9 5.8l-2 3.5 2.2 1.7a7 7 0 000 2l-2.2 1.7 2 3.5 2.7-1.1a7 7 0 001.7 1L10 21h4l.7-2.9a7 7 0 001.7-1l2.7 1.1 2-3.5-2.2-1.7c.1-.3.1-.7.1-1z" />
+                            </svg></span><span>Settings</span></button>
+                </nav>
+            </div>
+        </div>
+
+        <main class="main-panel">
+            <header class="topbar">
+                <div class="topbar-start">
+                    <button class="icon-btn mobile-only" id="mobileNavToggle" aria-label="Toggle menu"><svg
+                            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M4 7h16" />
+                            <path d="M4 12h16" />
+                            <path d="M4 17h16" />
+                        </svg></button>
+                    <div>
+                        <h1 id="pageTitle">Dashboard</h1>
+                        <p id="pageSubtitle">Track menu performance and orders in real time.</p>
+                    </div>
+                </div>
+                <div class="topbar-actions">
+                    <button id="supportButton" class="ghost-btn">Help</button>
+                    <div id="userBadge" class="user-badge"></div>
+                </div>
+            </header>
+
+            <div class="page-header">
+                <div>
+                    <p class="eyebrow">MANNA</p>
+                    <h2 id="pageHeading">Restaurant Console</h2>
+                </div>
+                <div class="breadcrumb" id="pageBreadcrumb">Home / Dashboard</div>
+            </div>
+
+            <section id="dashboardSection" class="section-panel active">
+                <div id="dashboardStats" class="stats-grid"></div>
+                <div class="content-grid">
+                    <div class="panel-card">
+                        <div class="panel-card-header">
+                            <h3>Recent Orders</h3>
+                            <button class="ghost-btn" data-section="orders">View all</button>
+                        </div>
+                        <div id="recentOrdersList" class="list-stack"></div>
+                    </div>
+                    <div class="panel-card">
+                        <div class="panel-card-header">
+                            <h3>Delivery Requests</h3>
+                            <span class="badge">Join requests</span>
+                        </div>
+                        <div id="deliveryRequestsList" class="list-stack"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="profileSection" class="section-panel">
+                <div class="panel-card">
+                    <div class="panel-card-header">
+                        <h3>Restaurant Profile</h3>
+                        <button id="saveProfileButton" class="primary-btn">Save Profile</button>
+                    </div>
+                    <form id="profileForm" class="form-grid"></form>
+                </div>
+            </section>
+
+            <section id="catalogSection" class="section-panel">
+                <div class="panel-card">
+                    <div class="panel-card-header">
+                        <h3>Master Catalog</h3>
+                        <div class="toolbar">
+                            <input id="catalogSearch" type="search" placeholder="Search catalog" />
+                            <select id="catalogCategoryFilter" title="Filter catalog by category">
+                                <option value="all">All categories</option>
+                            </select>
+                            <select id="catalogStatusFilter" title="Filter catalog by status">
+                                <option value="all">All statuses</option>
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="catalogGrid" class="card-grid"></div>
+                </div>
+            </section>
+
+            <section id="menuSection" class="section-panel">
+                <div class="panel-card">
+                    <div class="panel-card-header">
+                        <h3>My Menu</h3>
+                        <div class="toolbar">
+                            <input id="menuSearch" type="search" placeholder="Search menu" />
+                            <select id="menuCategoryFilter" title="Filter menu by category">
+                                <option value="all">All categories</option>
+                            </select>
+                            <select id="menuAvailabilityFilter" title="Filter menu by availability">
+                                <option value="all">Availability</option>
+                                <option value="available">Available</option>
+                                <option value="unavailable">Unavailable</option>
+                            </select>
+                            <select id="menuSort" title="Sort menu items">
+                                <option value="name">Sort by name</option>
+                                <option value="price">Sort by price</option>
+                                <option value="popularity">Sort by popularity</option>
+                            </select>
+                            <div class="view-toggle">
+                                <button class="ghost-btn active" data-view="grid">Grid</button>
+                                <button class="ghost-btn" data-view="list">List</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bulk-actions">
+                        <button id="bulkActivateButton" class="ghost-btn">Activate selected</button>
+                        <button id="bulkDeactivateButton" class="ghost-btn">Deactivate selected</button>
+                        <button id="bulkDeleteButton" class="ghost-btn danger">Delete selected</button>
+                    </div>
+                    <div id="menuContent" class="card-grid"></div>
+                </div>
+            </section>
+
+            <section id="ordersSection" class="section-panel">
+                <div class="panel-card">
+                    <div class="panel-card-header">
+                        <h3>Orders</h3>
+                        <select id="orderStatusFilter" title="Filter orders by status">
+                            <option value="all">All statuses</option>
+                            <option value="pending">Pending</option>
+                            <option value="accepted">Accepted</option>
+                            <option value="preparing">Preparing</option>
+                            <option value="ready">Ready for Pickup</option>
+                            <option value="picked_up">Picked Up</option>
+                            <option value="delivered">Delivered</option>
+                            <option value="cancelled">Cancelled</option>
+                            <option value="refunded">Refunded</option>
+                        </select>
+                    </div>
+                    <div id="ordersList" class="list-stack"></div>
+                </div>
+            </section>
+
+            <section id="reviewsSection" class="section-panel">
+                <div class="panel-card">
+                    <div class="panel-card-header">
+                        <h3>Reviews</h3>
+                        <span class="badge">Customer feedback</span>
+                    </div>
+                    <div id="reviewsList" class="list-stack"></div>
+                </div>
+            </section>
+
+            <section id="promotionsSection" class="section-panel">
+                <div class="panel-card">
+                    <div class="panel-card-header">
+                        <h3>Promotions</h3>
+                        <button id="createPromotionButton" class="primary-btn">Create Promotion</button>
+                    </div>
+                    <div id="promotionsList" class="card-grid"></div>
+                </div>
+            </section>
+
+            <section id="couponsSection" class="section-panel">
+                <div class="panel-card">
+                    <div class="panel-card-header">
+                        <h3>Coupons</h3>
+                        <button id="createCouponButton" class="primary-btn">Create Coupon</button>
+                    </div>
+                    <div id="couponsList" class="card-grid"></div>
+                </div>
+            </section>
+
+            <section id="analyticsSection" class="section-panel">
+                <div class="panel-card">
+                    <div class="panel-card-header">
+                        <h3>Store Analytics</h3>
+                        <span class="badge">Live insights</span>
+                    </div>
+                    <div id="analyticsSummary" class="stats-grid"></div>
+                    <div class="content-grid analytics-grid">
+                        <div class="panel-card inset-card">
+                            <h4>Revenue Trend</h4>
+                            <div id="revenueChart" class="chart"></div>
+                        </div>
+                        <div class="panel-card inset-card">
+                            <h4>Top Products</h4>
+                            <div id="productChart" class="chart"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="notificationsSection" class="section-panel">
+                <div class="panel-card">
+                    <div class="panel-card-header">
+                        <h3>Notifications</h3>
+                        <span id="notificationBadge" class="badge">0 unread</span>
+                    </div>
+                    <div id="notificationsList" class="list-stack"></div>
+                </div>
+            </section>
+
+            <section id="settingsSection" class="section-panel">
+                <div class="panel-card">
+                    <div class="panel-card-header">
+                        <h3>Store Settings</h3>
+                        <button id="saveSettingsButton" class="primary-btn">Save Settings</button>
+                    </div>
+                    <form id="settingsForm" class="form-grid"></form>
+                </div>
+            </section>
+
+            <section id="supportSection" class="section-panel">
+                <div class="panel-card">
+                    <div class="panel-card-header">
+                        <h3>Support Requests</h3>
+                        <span class="badge">Help center</span>
+                    </div>
+                    <div id="supportRequestsList" class="list-stack"></div>
+                </div>
+            </section>
+
+            <section id="chatSection" class="section-panel">
+                <div class="panel-card">
+                    <div class="panel-card-header">
+                        <h3>Support Chat</h3>
+                        <span class="badge">Future-ready</span>
+                    </div>
+                    <div id="chatMessages" class="chat-log"></div>
+                    <form id="chatForm" class="chat-form">
+                        <input id="chatInput" type="text" placeholder="Send a message to the support queue" />
+                        <button type="submit" class="primary-btn">Send</button>
+                    </form>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div id="toastRoot" class="toast-root"></div>
+    <div class="mobile-bottom-nav" id="mobileBottomNav">
+        <button class="mobile-nav-item active" data-section="dashboard" aria-label="Dashboard"><svg viewBox="0 0 24 24"
+                fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M4 10.5L12 4l8 6.5" />
+                <path d="M6.5 10.5V20h11V10.5" />
+            </svg></button>
+        <button class="mobile-nav-item" data-section="orders" aria-label="Orders"><svg viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="1.8">
+                <path d="M7 4h10l2 2v13l-2 2H7l-2-2V6l2-2z" />
+                <path d="M9 8h6M9 12h6M9 16h4" />
+            </svg></button>
+        <button class="mobile-nav-item" data-section="notifications" aria-label="Notifications"><svg viewBox="0 0 24 24"
+                fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M12 4a5 5 0 00-5 5v3l-1 2h12l-1-2V9a5 5 0 00-5-5z" />
+                <path d="M10 18a2 2 0 104 0" />
+            </svg></button>
+        <button class="mobile-nav-item" id="mobileMenuButton" aria-label="More"><svg viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="1.8">
+                <path d="M5 7h14" />
+                <path d="M5 12h14" />
+                <path d="M5 17h14" />
+            </svg></button>
+    </div>
+    <div id="modalBackdrop" class="modal-backdrop hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 id="modalTitle">Dialog</h3>
+                <button id="modalClose" class="ghost-btn">×</button>
+            </div>
+            <div id="modalBody" class="modal-body"></div>
+            <div id="modalActions" class="modal-actions"></div>
+        </div>
+    </div>
+
+    <script type="module" src="./restaurant-panel.js"></script>
+</body>
+
+</html>

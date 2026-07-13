@@ -1,0 +1,1039 @@
+import { initFirebase } from './firebase-config.js';
+import { formatCurrency, formatDate, createToast } from './utils.js';
+
+const state = {
+    authUser: null,
+    profile: null,
+    restaurants: [],
+    deliveryRequests: [],
+    allOrders: [],
+    notifications: [],
+    supportRequests: [],
+    chatMessages: [],
+    selectedOrder: null,
+    activeSection: 'dashboard',
+    loading: false,
+    profileUnsubscribe: null,
+    restaurantsUnsubscribe: null,
+    deliveryRequestsUnsubscribe: null,
+    ordersUnsubscribe: null,
+    notificationsUnsubscribe: null,
+    chatsUnsubscribe: null
+};
+
+const elements = {
+    authScreen: document.getElementById('authScreen'),
+    appShell: document.getElementById('appShell'),
+    loginForm: document.getElementById('loginForm'),
+    registerForm: document.getElementById('registerForm'),
+    authMessage: document.getElementById('authMessage'),
+    showRegisterButton: document.getElementById('showRegisterButton'),
+    showLoginButton: document.getElementById('showLoginButton'),
+    forgotPasswordButton: document.getElementById('forgotPasswordButton'),
+    logoutButton: document.getElementById('logoutButton'),
+    refreshButton: document.getElementById('refreshButton'),
+    saveProfileButton: document.getElementById('saveProfileButton'),
+    supportButton: document.getElementById('supportButton'),
+    notificationBell: document.getElementById('notificationBell'),
+    notificationDropdown: document.getElementById('notificationDropdown'),
+    notificationCount: document.getElementById('notificationCount'),
+    mobileNavToggle: document.getElementById('mobileNavToggle'),
+    mobileNavSheet: document.getElementById('mobileNavSheet'),
+    mobileNavClose: document.getElementById('mobileNavClose'),
+    mobileMenuButton: document.getElementById('mobileMenuButton'),
+    pageTitle: document.getElementById('pageTitle'),
+    pageSubtitle: document.getElementById('pageSubtitle'),
+    pageHeading: document.getElementById('pageHeading'),
+    pageBreadcrumb: document.getElementById('pageBreadcrumb'),
+    modalBackdrop: document.getElementById('modalBackdrop'),
+    modalTitle: document.getElementById('modalTitle'),
+    modalBody: document.getElementById('modalBody'),
+    modalClose: document.getElementById('modalClose'),
+    loadingOverlay: document.getElementById('loadingOverlay')
+};
+
+let firebase = null;
+let firestore = null;
+let auth = null;
+let authBootstrapTimer = null;
+
+function clearAuthBootstrapTimer() {
+    if (authBootstrapTimer) {
+        clearTimeout(authBootstrapTimer);
+        authBootstrapTimer = null;
+    }
+}
+
+function scheduleAuthFallback() {
+    clearAuthBootstrapTimer();
+    authBootstrapTimer = window.setTimeout(() => {
+        authBootstrapTimer = null;
+        if (!state.authUser && !auth?.currentUser) {
+            elements.authScreen.classList.remove('hidden');
+            elements.appShell.classList.add('hidden');
+        }
+    }, 900);
+}
+
+function init() {
+    bindEvents();
+    firebase = initFirebase();
+    auth = firebase.auth;
+    firestore = firebase.db;
+    if (!auth || !firestore) {
+        createToast('Firebase is not ready. Please refresh the page.', 'error');
+        return;
+    }
+    auth.onAuthStateChanged(handleAuthStateChange);
+}
+
+function bindEvents() {
+    elements.loginForm.addEventListener('submit', handleLogin);
+    elements.registerForm.addEventListener('submit', handleRegister);
+    elements.showRegisterButton.addEventListener('click', () => toggleAuthMode(true));
+    elements.forgotPasswordButton.addEventListener('click', handleForgotPassword);
+    elements.showLoginButton.addEventListener('click', () => toggleAuthMode(false));
+    elements.forgotPasswordButton.addEventListener('click', handleForgotPassword);
+    elements.logoutButton.addEventListener('click', handleLogout);
+    elements.refreshButton.addEventListener('click', () => refreshData());
+    if (elements.saveProfileButton) {
+        elements.saveProfileButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            saveProfile();
+        });
+    }
+    elements.notificationBell.addEventListener('click', () => toggleNotifications());
+    elements.supportButton?.addEventListener('click', toggleSupportModal);
+    if (elements.mobileNavToggle) {
+        const openMobileMenu = (event) => {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            setMobileNavOpen(true);
+        };
+        elements.mobileNavToggle.addEventListener('click', openMobileMenu);
+    }
+    if (elements.mobileNavClose) {
+        elements.mobileNavClose.addEventListener('click', (event) => {
+            event.stopPropagation();
+            setMobileNavOpen(false);
+        });
+    }
+    if (elements.mobileMenuButton) {
+        elements.mobileMenuButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setMobileNavOpen(true);
+        });
+    }
+    if (elements.mobileNavSheet) {
+        elements.mobileNavSheet.addEventListener('click', (event) => {
+            if (event.target === elements.mobileNavSheet) {
+                setMobileNavOpen(false);
+            }
+        });
+    }
+    document.querySelectorAll('.nav-item[data-section], .mobile-nav-item[data-section]').forEach((button) => {
+        button.addEventListener('click', () => showSection(button.dataset.section));
+    });
+    elements.modalClose.addEventListener('click', closeModal);
+    elements.modalBackdrop.addEventListener('click', (event) => {
+        if (event.target === elements.modalBackdrop) closeModal();
+    });
+    window.addEventListener('keydown', handleModalEscape);
+
+    const onboardingOverlay = document.getElementById('onboardingOverlay');
+    const closeOnboarding = document.getElementById('closeOnboarding');
+    if (closeOnboarding) {
+        closeOnboarding.addEventListener('click', () => {
+            if (onboardingOverlay) {
+                onboardingOverlay.classList.add('hidden');
+                onboardingOverlay.setAttribute('aria-hidden', 'true');
+            }
+            localStorage.setItem('manna-onboarding-seen-delivery', 'true');
+        });
+    }
+    if (onboardingOverlay && !localStorage.getItem('manna-onboarding-seen-delivery')) {
+        onboardingOverlay.classList.remove('hidden');
+        onboardingOverlay.setAttribute('aria-hidden', 'false');
+    }
+
+    document.addEventListener('click', (event) => {
+        if (event.target.closest('#mobileMenuButton')) {
+            event.preventDefault();
+            event.stopPropagation();
+            setMobileNavOpen(true);
+            return;
+        }
+        const sectionButton = event.target.closest('[data-section]');
+        if (sectionButton && !sectionButton.closest('.nav-item') && !sectionButton.closest('.mobile-nav-item')) {
+            const section = sectionButton.dataset.section;
+            if (section) showSection(section);
+        }
+
+        const actionButton = event.target.closest('[data-action]');
+        if (actionButton) {
+            handleAction(actionButton.dataset.action, actionButton.dataset.id);
+        }
+    });
+}
+
+function setMobileNavOpen(isOpen) {
+    if (!elements.mobileNavSheet) return;
+    elements.mobileNavSheet.classList.toggle('open', isOpen);
+    elements.mobileNavSheet.setAttribute('aria-hidden', String(!isOpen));
+    document.body.style.overflow = isOpen ? 'hidden' : '';
+}
+
+function setActiveNavigation(section) {
+    document.querySelectorAll('.nav-item[data-section], .mobile-nav-item[data-section]').forEach((button) => {
+        button.classList.toggle('active', button.getAttribute('data-section') === section);
+    });
+}
+
+function toggleAuthMode(showRegister) {
+    elements.loginForm.classList.toggle('hidden', showRegister);
+    elements.registerForm.classList.toggle('hidden', !showRegister);
+    elements.authMessage.textContent = '';
+}
+
+function resolvePasswordResetEmail(fallbackEmail = '') {
+    const profileEmail = state.profile?.email || state.authUser?.email || '';
+    if (profileEmail) return profileEmail;
+    const loginEmail = document.getElementById('loginEmail')?.value?.trim() || '';
+    return loginEmail || fallbackEmail;
+}
+
+function setLoading(isLoading) {
+    state.loading = isLoading;
+    elements.loadingOverlay.classList.toggle('hidden', !isLoading);
+}
+
+async function handleLogin(event) {
+    event.preventDefault();
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    setLoading(true);
+    try {
+        await auth.signInWithEmailAndPassword(email, password);
+    } catch (error) {
+        elements.authMessage.textContent = error.message;
+        createToast(error.message, 'error');
+    } finally {
+        setLoading(false);
+    }
+}
+
+async function handleRegister(event) {
+    event.preventDefault();
+    const name = document.getElementById('registerName').value.trim();
+    const phone = document.getElementById('registerPhone').value.trim();
+    const email = document.getElementById('registerEmail').value.trim();
+    const password = document.getElementById('registerPassword').value;
+    const confirmPassword = document.getElementById('registerConfirmPassword').value;
+    const vehicleType = document.getElementById('registerVehicleType').value;
+    if (!name || !phone || !email || !password || password !== confirmPassword) {
+        elements.authMessage.textContent = 'Please complete all fields and make sure passwords match.';
+        return;
+    }
+    setLoading(true);
+    try {
+        const result = await auth.createUserWithEmailAndPassword(email, password);
+        const user = result.user;
+        await user.updateProfile({ displayName: name });
+        await firestore.collection('users').doc(user.uid).set({
+            uid: user.uid,
+            displayName: name,
+            phone,
+            email,
+            role: 'delivery_person',
+            vehicleType,
+            vehiclePlate: '',
+            isActive: true,
+            rating: 4.9,
+            totalDeliveries: 0,
+            totalEarnings: 0,
+            approvedRestaurants: [],
+            createdAt: new Date(),
+            updatedAt: new Date()
+        });
+        toggleAuthMode(false);
+        createToast('Delivery account created. Welcome to MANNA.', 'success');
+    } catch (error) {
+        elements.authMessage.textContent = error.message;
+        createToast(error.message, 'error');
+    } finally {
+        setLoading(false);
+    }
+}
+
+async function handleForgotPassword() {
+    const email = resolvePasswordResetEmail();
+    if (!email) {
+        const enteredEmail = prompt('Enter the email linked to your account');
+        if (!enteredEmail) return;
+        const targetEmail = enteredEmail.trim();
+        if (!targetEmail) return;
+        try {
+            await auth.sendPasswordResetEmail(targetEmail);
+            createToast('Password reset email sent.', 'success');
+        } catch (error) {
+            createToast(error.message, 'error');
+        }
+        return;
+    }
+    try {
+        await auth.sendPasswordResetEmail(email);
+        createToast('Password reset email sent.', 'success');
+    } catch (error) {
+        createToast(error.message, 'error');
+    }
+}
+
+async function handleLogout() {
+    clearAuthBootstrapTimer();
+    try {
+        await auth.signOut();
+        cleanupListeners();
+        state.profile = null;
+        state.restaurants = [];
+        state.allOrders = [];
+        state.notifications = [];
+        elements.authScreen.classList.remove('hidden');
+        elements.appShell.classList.add('hidden');
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+async function handleAuthStateChange(user) {
+    if (!user) {
+        if (state.authUser) {
+            clearAuthBootstrapTimer();
+            cleanupListeners();
+            state.authUser = null;
+            state.profile = null;
+            elements.authScreen.classList.remove('hidden');
+            elements.appShell.classList.add('hidden');
+            return;
+        }
+        scheduleAuthFallback();
+        return;
+    }
+    clearAuthBootstrapTimer();
+    setLoading(true);
+    try {
+        const userDocRef = firestore.collection('users').doc(user.uid);
+        const userDoc = await userDocRef.get();
+        if (!userDoc.exists) {
+            await userDocRef.set({
+                uid: user.uid,
+                displayName: user.displayName || user.email,
+                email: user.email,
+                phone: '',
+                role: 'delivery_person',
+                vehicleType: 'Motorcycle',
+                vehiclePlate: '',
+                isActive: true,
+                rating: 4.9,
+                totalDeliveries: 0,
+                totalEarnings: 0,
+                approvedRestaurants: [],
+                createdAt: new Date(),
+                updatedAt: new Date()
+            });
+        }
+        const profile = userDoc.exists ? userDoc.data() : { role: 'delivery_person' };
+        const role = profile?.role || 'delivery_person';
+        if (role !== 'delivery_person') {
+            elements.authMessage.textContent = 'This account is not authorized for the delivery panel.';
+            elements.authScreen.classList.remove('hidden');
+            elements.appShell.classList.add('hidden');
+            createToast('Please use the correct panel for this account.', 'warning');
+            return;
+        }
+        state.authUser = user;
+        state.profile = profile;
+        elements.authScreen.classList.add('hidden');
+        elements.appShell.classList.remove('hidden');
+        showSection(state.activeSection);
+        setupRealtimeListeners(user.uid);
+        if (!user.emailVerified) {
+            createToast('Please verify your email before taking deliveries.', 'info');
+        }
+        renderAll();
+    } catch (error) {
+        console.error(error);
+        createToast(error.message || 'Unable to load the delivery dashboard.', 'error');
+    } finally {
+        setLoading(false);
+    }
+}
+
+function setupRealtimeListeners(userId) {
+    cleanupListeners();
+    state.profileUnsubscribe = firestore.collection('users').doc(userId).onSnapshot((doc) => {
+        state.profile = doc.data() || {};
+        renderProfile();
+        renderSettings();
+        renderDashboard();
+    }, (error) => {
+        console.error('[MANNA] Delivery profile listener failed:', error);
+    });
+
+    state.restaurantsUnsubscribe = firestore.collection('restaurants').onSnapshot((snapshot) => {
+        state.restaurants = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        renderRestaurants();
+        renderDashboard();
+    }, (error) => {
+        console.error('[MANNA] Delivery restaurants listener failed:', error);
+    });
+
+    state.deliveryRequestsUnsubscribe = firestore.collection('deliveryRequests').where('deliveryPersonUid', '==', userId).onSnapshot((snapshot) => {
+        state.deliveryRequests = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+        renderRestaurants();
+        renderDashboard();
+    }, (error) => {
+        console.error('[MANNA] Delivery requests listener failed:', error);
+    });
+
+    state.ordersUnsubscribe = firestore.collection('orders').onSnapshot((snapshot) => {
+        state.allOrders = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        renderAllLists();
+        renderDashboard();
+    }, (error) => {
+        console.error('[MANNA] Delivery orders listener failed:', error);
+    });
+
+    state.notificationsUnsubscribe = firestore.collection('notifications').where('recipientUid', '==', userId).orderBy('createdAt', 'desc').onSnapshot((snapshot) => {
+        state.notifications = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        renderNotifications();
+        renderHeaderNotifications();
+    }, (error) => {
+        console.error('[MANNA] Delivery notifications listener failed:', error);
+    });
+}
+
+function cleanupListeners() {
+    [state.profileUnsubscribe, state.restaurantsUnsubscribe, state.deliveryRequestsUnsubscribe, state.ordersUnsubscribe, state.notificationsUnsubscribe, state.chatsUnsubscribe].forEach((unsubscribe) => { if (unsubscribe) unsubscribe(); });
+    state.profileUnsubscribe = null;
+    state.restaurantsUnsubscribe = null;
+    state.deliveryRequestsUnsubscribe = null;
+    state.ordersUnsubscribe = null;
+    state.notificationsUnsubscribe = null;
+    state.chatsUnsubscribe = null;
+}
+
+function renderAll() {
+    renderDashboard();
+    renderAvailableOrders();
+    renderActiveDeliveries();
+    renderHistory();
+    renderRestaurants();
+    renderProfile();
+    renderSettings();
+    renderNotifications();
+    renderHeaderNotifications();
+}
+
+function renderAllLists() {
+    renderAvailableOrders();
+    renderActiveDeliveries();
+    renderHistory();
+    renderRestaurants();
+    renderNotifications();
+    renderDashboard();
+}
+
+function renderDashboard() {
+    const approvedRestaurantIds = state.profile?.approvedRestaurants || [];
+    const available = state.allOrders.filter((order) => !order.isDeleted && approvedRestaurantIds.includes(order.restaurantId) && order.status === 'accepted' && !order.deliveryPersonUid);
+    const active = state.allOrders.filter((order) => !order.isDeleted && order.deliveryPersonUid === state.authUser?.uid && order.status === 'out_for_delivery');
+    const history = state.allOrders.filter((order) => !order.isDeleted && order.deliveryPersonUid === state.authUser?.uid && ['delivered', 'received'].includes(order.status));
+    const today = history.filter((order) => {
+        const updated = order.updatedAt?.toDate ? order.updatedAt.toDate() : new Date(order.updatedAt || Date.now());
+        const todayDate = new Date();
+        return updated.toDateString() === todayDate.toDateString();
+    });
+
+    document.getElementById('statAvailable').textContent = available.length;
+    document.getElementById('statActive').textContent = active.length;
+    document.getElementById('statToday').textContent = today.length;
+    document.getElementById('statRating').textContent = Number(state.profile?.rating || 0).toFixed(1);
+
+    const recent = [...history].sort((a, b) => (b.updatedAt?.seconds || 0) - (a.updatedAt?.seconds || 0)).slice(0, 5);
+    document.getElementById('recentActivityList').innerHTML = recent.length ? recent.map((order) => `
+    <div class="item-card">
+      <div class="panel-card-header"><strong>#${order.orderNumber || order.id.slice(0, 6)}</strong><span class="badge">${order.status}</span></div>
+      <div class="muted">${order.restaurantName || 'Restaurant'} • ${formatDate(order.updatedAt || order.createdAt)}</div>
+    </div>`).join('') : '<div class="empty-state">No completed deliveries yet.</div>';
+
+    const myRestaurants = state.restaurants.filter((restaurant) => approvedRestaurantIds.includes(restaurant.id));
+    document.getElementById('myRestaurantsList').innerHTML = myRestaurants.length ? myRestaurants.map((restaurant) => `
+    <div class="item-card">
+      <div class="panel-card-header"><strong>${restaurant.name}</strong><span class="badge">Approved</span></div>
+      <div class="muted">${restaurant.location || 'Location unavailable'}</div>
+      <div class="action-row">
+        <button class="danger-btn" data-action="leave-restaurant" data-id="${restaurant.id}">Leave</button>
+      </div>
+    </div>`).join('') : '<div class="empty-state">You have not been approved by any restaurant yet.</div>';
+}
+
+function getDeliveryLocationMeta(order) {
+    const latitude = Number(order.deliveryLat ?? order.coordinates?.latitude ?? order.deliveryLocation?.latitude ?? order.lat ?? order.latitude ?? null);
+    const longitude = Number(order.deliveryLng ?? order.coordinates?.longitude ?? order.deliveryLocation?.longitude ?? order.lng ?? order.longitude ?? null);
+    const address = order.address || order.deliveryLocation?.address || order.deliveryDetails || order.deliveryLandmark || '';
+    const label = order.deliveryLocationLabel || order.deliveryLandmark || order.deliveryDetails || address || 'Delivery address';
+    const mapsUrl = Number.isFinite(latitude) && Number.isFinite(longitude)
+        ? `https://www.google.com/maps?q=${latitude},${longitude}&z=16`
+        : `https://www.google.com/maps?q=${encodeURIComponent(address || label)}`;
+    return { latitude, longitude, address, label, mapsUrl };
+}
+
+function renderDeliveryLocationMap(order) {
+    const { latitude, longitude, label, mapsUrl } = getDeliveryLocationMeta(order);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        return '';
+    }
+    return `
+      <div class="delivery-map-card">
+        <div class="map-hint">Google Maps • Live directions</div>
+        <iframe
+          title="Delivery location map"
+          loading="lazy"
+          referrerpolicy="no-referrer-when-downgrade"
+          src="https://www.google.com/maps?q=${latitude},${longitude}&z=15&output=embed"
+        ></iframe>
+        <div class="muted" style="font-size: 12px;">${label}</div>
+        <div class="action-row">
+          <a class="primary-btn" href="${mapsUrl}" target="_blank" rel="noopener noreferrer">Open in Google Maps</a>
+        </div>
+      </div>`;
+}
+
+function renderAvailableOrders() {
+    const approvedRestaurantIds = state.profile?.approvedRestaurants || [];
+    const available = state.allOrders.filter((order) => !order.isDeleted && approvedRestaurantIds.includes(order.restaurantId) && ['accepted', 'preparing', 'ready'].includes(order.status) && !order.deliveryPersonUid);
+    document.getElementById('availableOrdersList').innerHTML = available.length ? available.map((order) => {
+        const buttonLabel = order.status === 'ready' ? 'Start Delivery' : 'Pick Up';
+        return `
+    <div class="item-card">
+      <img src="${getImagePath(order.items?.[0]?.imagePath || order.items?.[0]?.image || order.items?.[0]?.imageFilename || '', 'products')}" alt="${order.items?.[0]?.name || 'Order'}" />
+      <div class="panel-card-header"><strong>#${order.orderNumber || order.id.slice(0, 6)}</strong><span class="badge">${order.status || 'accepted'}</span></div>
+      <div class="meta-stack">
+        <div class="meta-row"><span>${order.items?.[0]?.name || 'Order'} × ${order.items?.[0]?.quantity || 1}</span><span>${formatCurrency(order.total || 0)}</span></div>
+        <div class="meta-row"><span>${order.address || 'Address unavailable'}</span><span>${order.deliveryLocationLabel || 'Standard'}</span></div>
+        <div class="muted">${order.deliveryLandmark || order.deliveryDetails || 'No delivery notes'}</div>
+      </div>
+      ${renderDeliveryLocationMap(order)}
+      <div class="action-row">
+        <button class="primary-btn" data-action="pick-up-order" data-id="${order.id}">${buttonLabel}</button>
+        <button class="ghost-btn" data-action="open-chat" data-id="${order.id}">Chat</button>
+      </div>
+    </div>`;
+    }).join('') : '<div class="empty-state">No available orders from your approved restaurants yet.</div>';
+}
+
+function renderActiveDeliveries() {
+    const active = state.allOrders.filter((order) => !order.isDeleted && order.deliveryPersonUid === state.authUser?.uid && order.status === 'out_for_delivery');
+    document.getElementById('activeDeliveriesList').innerHTML = active.length ? active.map((order) => `
+    <div class="item-card">
+      <img src="${getImagePath(order.items?.[0]?.imagePath || order.items?.[0]?.image || order.items?.[0]?.imageFilename || '', 'products')}" alt="${order.items?.[0]?.name || 'Order'}" />
+      <div class="panel-card-header"><strong>#${order.orderNumber || order.id.slice(0, 6)}</strong><span class="badge">${order.status}</span></div>
+      <div class="meta-stack">
+        <div class="meta-row"><span>${order.customerName || 'Customer'}</span><span>${order.items?.[0]?.name || 'Order'} × ${order.items?.[0]?.quantity || 1}</span></div>
+        <div class="muted">${order.address || 'Address unavailable'}</div>
+        <div class="muted">${order.deliveryLandmark || order.deliveryDetails || 'No delivery notes'}</div>
+      </div>
+      ${renderDeliveryLocationMap(order)}
+      <div class="muted">ETA: ${order.estimatedDeliveryTime ? formatDate(order.estimatedDeliveryTime) : 'Pending'} • Refund: ${order.refundStatus || 'none'}</div>
+      <div class="action-row">
+        <button class="primary-btn" data-action="deliver-order" data-id="${order.id}">Delivered</button>
+        <button class="ghost-btn" data-action="report-issue" data-id="${order.id}">Report Issue</button>
+        <button class="ghost-btn" data-action="open-chat" data-id="${order.id}">Chat</button>
+      </div>
+    </div>`).join('') : '<div class="empty-state">No active deliveries right now.</div>';
+}
+
+function renderHistory() {
+    const history = state.allOrders.filter((order) => !order.isDeleted && order.deliveryPersonUid === state.authUser?.uid && ['delivered', 'received'].includes(order.status));
+    document.getElementById('historyList').innerHTML = history.length ? history.map((order) => `
+    <div class="item-card">
+      <div class="panel-card-header"><strong>#${order.orderNumber || order.id.slice(0, 6)}</strong><span class="badge">${order.status}</span></div>
+      <div class="muted">${order.restaurantName || 'Restaurant'} • ${formatCurrency(order.total || 0)}</div>
+      <div class="muted">${order.customerName || 'Customer'} • ${formatDate(order.updatedAt || order.createdAt)}</div>
+      <div class="action-row">
+        <button class="ghost-btn" data-action="open-chat" data-id="${order.id}">Chat</button>
+        <button class="danger-btn" data-action="delete-history" data-id="${order.id}">Delete</button>
+      </div>
+    </div>`).join('') : '<div class="empty-state">Delivery history is empty.</div>';
+}
+
+function renderRestaurants() {
+    const approvedRestaurantIds = state.profile?.approvedRestaurants || [];
+    const requestCards = state.deliveryRequests.length ? state.deliveryRequests.map((request) => {
+        const restaurant = state.restaurants.find((entry) => entry.id === request.restaurantId);
+        const statusLabel = request.status === 'approved' ? 'Approved' : request.status === 'rejected' ? 'Declined' : 'Pending';
+        return `
+        <div class="item-card">
+          <div class="panel-card-header"><strong>${restaurant?.name || 'Restaurant'}</strong><span class="badge">${statusLabel}</span></div>
+          <div class="muted">${restaurant?.location || 'Location unavailable'}</div>
+          <div class="muted">${request.status === 'pending' ? 'Waiting for restaurant confirmation.' : request.status === 'approved' ? 'You are now approved to deliver for this restaurant.' : 'Your request was declined.'}</div>
+        </div>`;
+    }).join('') : '<div class="empty-state">You have not requested any restaurant partnerships yet.</div>';
+    const approvedCards = state.restaurants.filter((restaurant) => approvedRestaurantIds.includes(restaurant.id)).length ? state.restaurants.filter((restaurant) => approvedRestaurantIds.includes(restaurant.id)).map((restaurant) => `
+    <div class="item-card">
+      <img src="${getImagePath(restaurant.logo, 'restaurants')}" alt="${restaurant.name}" />
+      <div class="panel-card-header"><strong>${restaurant.name}</strong><span class="badge">Approved</span></div>
+      <div class="muted">${restaurant.location || 'Location unavailable'} • ${restaurant.category || 'Restaurant'}</div>
+    </div>`).join('') : '<div class="empty-state">No approved restaurant partners yet.</div>';
+    document.getElementById('restaurantsList').innerHTML = state.restaurants.length ? state.restaurants.map((restaurant) => `
+    <div class="item-card">
+      <img src="${getImagePath(restaurant.logo, 'restaurants')}" alt="${restaurant.name}" />
+      <div class="panel-card-header"><strong>${restaurant.name}</strong><span class="badge">${restaurant.rating || 'New'}</span></div>
+      <div class="muted">${restaurant.location || 'Location unavailable'} • ${restaurant.category || 'Restaurant'}</div>
+      <div class="action-row">
+        <button class="${approvedRestaurantIds.includes(restaurant.id) ? 'ghost-btn' : 'primary-btn'}" data-action="request-delivery" data-id="${restaurant.id}">${approvedRestaurantIds.includes(restaurant.id) ? 'Approved' : 'Request to Deliver'}</button>
+      </div>
+    </div>`).join('') : '<div class="empty-state">No restaurants are available right now.</div>';
+    document.getElementById('myRequestsList').innerHTML = requestCards;
+    document.getElementById('approvedRestaurantsList').innerHTML = approvedCards;
+}
+
+function renderProfile() {
+    const profile = state.profile || {};
+    document.getElementById('profileForm').innerHTML = `
+    <label>Name<input id="profileName" value="${profile.displayName || ''}" /></label>
+    <label>Phone<input id="profilePhone" value="${profile.phone || ''}" /></label>
+    <label>Email<input value="${profile.email || ''}" readonly /></label>
+    <label>Vehicle Type<select id="profileVehicleType">
+      <option value="Bicycle" ${profile.vehicleType === 'Bicycle' ? 'selected' : ''}>Bicycle</option>
+      <option value="Motorcycle" ${profile.vehicleType === 'Motorcycle' ? 'selected' : ''}>Motorcycle</option>
+      <option value="Car" ${profile.vehicleType === 'Car' ? 'selected' : ''}>Car</option>
+    </select></label>
+    <label>Vehicle Plate<input id="profileVehiclePlate" value="${profile.vehiclePlate || ''}" /></label>
+    <label>Rating<input value="${profile.rating || 0}" readonly /></label>
+    <label>Total Deliveries<input value="${profile.totalDeliveries || 0}" readonly /></label>
+  `;
+}
+
+function renderSettings() {
+    const profile = state.profile || {};
+    document.getElementById('settingsContent').innerHTML = `
+    <div class="item-card">
+      <div class="panel-card-header"><strong>Availability</strong><span class="badge">${profile.isActive ? 'Online' : 'Offline'}</span></div>
+      <label><input type="checkbox" id="availabilityToggle" ${profile.isActive ? 'checked' : ''} /> Available for new deliveries</label>
+      <div class="action-row">
+        <button class="primary-btn" data-action="change-password">Change Password</button>
+        <button class="danger-btn" data-action="deactivate-account">Deactivate Account</button>
+      </div>
+    </div>`;
+    const availabilityToggle = document.getElementById('availabilityToggle');
+    if (availabilityToggle) {
+        availabilityToggle.addEventListener('change', async () => {
+            await firestore.collection('users').doc(state.authUser.uid).set({ isActive: availabilityToggle.checked, updatedAt: new Date() }, { merge: true });
+            createToast(availabilityToggle.checked ? 'You are online for new deliveries.' : 'You are offline for now.', 'success');
+        });
+    }
+}
+
+function renderNotifications() {
+    document.getElementById('notificationsList').innerHTML = state.notifications.filter((item) => !item.isDeleted).length ? state.notifications.filter((item) => !item.isDeleted).map((item) => `
+    <div class="item-card">
+      <div class="panel-card-header"><strong>${item.title || 'Update'}</strong><span class="badge">${item.type || 'system'}</span></div>
+      <div class="muted">${item.message || ''}</div>
+      <div class="muted">${formatDate(item.createdAt)}</div>
+      <div class="action-row">
+        <button class="ghost-btn" data-action="mark-notification-read" data-id="${item.id}">${item.read ? 'Read' : 'Mark as Read'}</button>
+        <button class="danger-btn" data-action="delete-notification" data-id="${item.id}">Delete</button>
+      </div>
+    </div>`).join('') : '<div class="empty-state">No notifications yet.</div>';
+}
+
+function renderHeaderNotifications() {
+    const unread = state.notifications.filter((item) => !item.isDeleted && !item.read).length;
+    elements.notificationCount.textContent = unread;
+    elements.notificationCount.classList.toggle('hidden', unread === 0);
+    elements.notificationDropdown.innerHTML = state.notifications.filter((item) => !item.isDeleted).length ? state.notifications.filter((item) => !item.isDeleted).slice(0, 5).map((item) => `<div class="item-card"><strong>${item.title || 'Update'}</strong><div class="muted">${item.message || ''}</div></div>`).join('') : '<div class="empty-state">No recent updates.</div>';
+}
+
+function toggleNotifications() {
+    elements.notificationDropdown.classList.toggle('hidden');
+}
+
+function showSection(section) {
+    state.activeSection = section;
+    setActiveNavigation(section);
+    setMobileNavOpen(false);
+    document.querySelectorAll('.section-panel').forEach((panel) => panel.classList.toggle('active', panel.id === `${section}Section`));
+    const titleMap = {
+        dashboard: ['Dashboard', 'Pick up, deliver, and keep your route moving.', 'Delivery Console', 'Dashboard / Overview'],
+        available: ['Available Orders', 'Orders ready for pickup from approved restaurants.', 'Available Orders', 'Dashboard / Orders'],
+        active: ['Active Deliveries', 'Orders currently assigned to you.', 'Active Deliveries', 'Dashboard / Deliveries'],
+        history: ['Delivery History', 'Completed deliveries and your route summary.', 'Delivery History', 'Dashboard / History'],
+        restaurants: ['Restaurants', 'Request deliveries from restaurants you want to work with.', 'Restaurants', 'Dashboard / Restaurants'],
+        notifications: ['Notifications', 'Stay updated on your deliveries.', 'Notifications', 'Dashboard / Alerts'],
+        profile: ['Profile', 'Update your profile and vehicle details.', 'Profile', 'Dashboard / Profile'],
+        settings: ['Settings', 'Manage availability and account options.', 'Settings', 'Dashboard / Preferences']
+    };
+    const [title, subtitle, heading, breadcrumb] = titleMap[section] || titleMap.dashboard;
+    elements.pageTitle.textContent = title;
+    elements.pageSubtitle.textContent = subtitle;
+    if (elements.pageHeading) elements.pageHeading.textContent = heading;
+    if (elements.pageBreadcrumb) elements.pageBreadcrumb.textContent = breadcrumb;
+}
+
+async function handleAction(action, id) {
+    if (!state.authUser) return;
+    switch (action) {
+        case 'pick-up-order':
+            await pickUpOrder(id);
+            break;
+        case 'deliver-order':
+            await markDelivered(id);
+            break;
+        case 'report-issue':
+            await reportIssue(id);
+            break;
+        case 'request-delivery':
+            await requestDelivery(id);
+            break;
+        case 'leave-restaurant':
+            await leaveRestaurant(id);
+            break;
+        case 'mark-notification-read':
+            await markNotificationRead(id);
+            break;
+        case 'delete-notification':
+            await deleteNotification(id);
+            break;
+        case 'delete-history':
+            await deleteHistory(id);
+            break;
+        case 'change-password':
+            await handleForgotPassword();
+            break;
+        case 'deactivate-account':
+            await deactivateAccount();
+            break;
+        case 'open-chat':
+            await openChat(id);
+            break;
+        default:
+            break;
+    }
+}
+
+async function pickUpOrder(orderId) {
+    if (!ensureDeliveryProfileComplete()) return;
+    try {
+        const profile = state.profile || {};
+        const order = state.allOrders.find((entry) => entry.id === orderId);
+        await firestore.collection('orders').doc(orderId).update({
+            status: 'out_for_delivery',
+            deliveryPersonUid: state.authUser.uid,
+            deliveryPersonName: profile.displayName || profile.email || 'Delivery person',
+            deliveryPersonPhone: profile.phone || '',
+            deliveryPersonVehicleType: profile.vehicleType || '',
+            updatedAt: new Date()
+        });
+        await Promise.all([
+            createNotification(state.authUser.uid, 'Order assigned', 'You picked up an order and it is now in transit.', 'delivery'),
+            order?.customerUid ? createNotification(order.customerUid, 'Order on the way', 'Your order is now on the way with a delivery partner.', 'delivery') : Promise.resolve(),
+            order?.restaurantId ? (async () => {
+                const restaurant = state.restaurants.find((entry) => entry.id === order.restaurantId);
+                if (restaurant?.ownerUid) {
+                    await createNotification(restaurant.ownerUid, 'Delivery assigned', 'A delivery partner is now on the way with one of your orders.', 'delivery');
+                }
+            })() : Promise.resolve()
+        ]);
+        createToast('Order picked up and assigned to you.', 'success');
+    } catch (error) {
+        createToast(error.message, 'error');
+    }
+}
+
+async function markDelivered(orderId) {
+    if (!ensureDeliveryProfileComplete()) return;
+    try {
+        await firestore.collection('orders').doc(orderId).update({ status: 'delivered', updatedAt: new Date() });
+        const order = state.allOrders.find((entry) => entry.id === orderId);
+        if (order?.customerUid) {
+            await createNotification(order.customerUid, 'Delivery completed', 'Your order was delivered successfully.', 'delivery');
+        }
+        if (order?.restaurantId) {
+            const restaurant = state.restaurants.find((entry) => entry.id === order.restaurantId);
+            if (restaurant?.ownerUid) {
+                await createNotification(restaurant.ownerUid, 'Delivery completed', 'A delivery was completed for your restaurant.', 'delivery');
+            }
+        }
+        createToast('Delivery marked as complete.', 'success');
+    } catch (error) {
+        createToast(error.message, 'error');
+    }
+}
+
+async function reportIssue(orderId) {
+    const message = prompt('Describe the issue');
+    if (!message) return;
+    try {
+        await firestore.collection('reports').add({ orderId, deliveryPersonUid: state.authUser.uid, message, createdAt: new Date() });
+        createToast('Issue reported to the admin team.', 'success');
+    } catch (error) {
+        createToast(error.message, 'error');
+    }
+}
+
+async function requestDelivery(restaurantId) {
+    try {
+        const restaurant = state.restaurants.find((entry) => entry.id === restaurantId);
+        const existing = await firestore.collection('deliveryRequests').where('deliveryPersonUid', '==', state.authUser.uid).where('restaurantId', '==', restaurantId).limit(1).get();
+        if (!existing.empty) {
+            const currentStatus = existing.docs[0].data()?.status || 'pending';
+            createToast(currentStatus === 'approved' ? 'You are already approved for this restaurant.' : 'You already have a request for this restaurant.', 'info');
+            return;
+        }
+        const requestPayload = {
+            deliveryPersonUid: state.authUser.uid,
+            deliveryPersonName: state.profile?.displayName || state.profile?.email || 'Delivery person',
+            restaurantId,
+            restaurantName: restaurant?.name || '',
+            status: 'pending',
+            createdAt: new Date()
+        };
+        await firestore.collection('deliveryRequests').add(requestPayload);
+        if (restaurant?.ownerUid) {
+            await firestore.collection('notifications').add({
+                recipientUid: restaurant.ownerUid,
+                title: 'New delivery request',
+                message: `${requestPayload.deliveryPersonName} wants to join ${restaurant.name || 'your restaurant'}.`,
+                type: 'delivery',
+                read: false,
+                isDeleted: false,
+                createdAt: new Date()
+            });
+        }
+        createToast('Delivery request sent to the restaurant.', 'success');
+    } catch (error) {
+        createToast(error.message, 'error');
+    }
+}
+
+async function leaveRestaurant(restaurantId) {
+    try {
+        const restaurantRef = firestore.collection('restaurants').doc(restaurantId);
+        const restaurantDoc = await restaurantRef.get();
+        const current = restaurantDoc.data()?.deliveryPersons || [];
+        const next = current.filter((uid) => uid !== state.authUser.uid);
+        await restaurantRef.update({ deliveryPersons: next, updatedAt: new Date() });
+        const profileApproved = state.profile?.approvedRestaurants || [];
+        await firestore.collection('users').doc(state.authUser.uid).set({ approvedRestaurants: profileApproved.filter((id) => id !== restaurantId), updatedAt: new Date() }, { merge: true });
+        createToast('You have left this restaurant network.', 'success');
+    } catch (error) {
+        createToast(error.message, 'error');
+    }
+}
+
+async function markNotificationRead(notificationId) {
+    try {
+        await firestore.collection('notifications').doc(notificationId).set({ read: true, updatedAt: new Date() }, { merge: true });
+    } catch (error) {
+        createToast(error.message, 'error');
+    }
+}
+
+async function deleteNotification(notificationId) {
+    try {
+        await firestore.collection('notifications').doc(notificationId).set({ isDeleted: true, updatedAt: new Date() }, { merge: true });
+    } catch (error) {
+        createToast(error.message, 'error');
+    }
+}
+
+async function deleteHistory(orderId) {
+    try {
+        await firestore.collection('orders').doc(orderId).set({ isDeleted: true, updatedAt: new Date() }, { merge: true });
+        createToast('Order removed from history.', 'success');
+    } catch (error) {
+        createToast(error.message, 'error');
+    }
+}
+
+async function deactivateAccount() {
+    try {
+        await firestore.collection('users').doc(state.authUser.uid).set({ isActive: false, isDeleted: true, updatedAt: new Date() }, { merge: true });
+        await auth.signOut();
+        createToast('Your account has been deactivated.', 'success');
+    } catch (error) {
+        createToast(error.message, 'error');
+    }
+}
+
+async function updateUserProfile(uid, updates) {
+    if (!uid) {
+        throw new Error('A user id is required to save the profile.');
+    }
+    const button = document.querySelector('#saveProfileButton');
+    if (button) {
+        button.disabled = true;
+        button.textContent = 'Saving…';
+    }
+    try {
+        const payload = {
+            ...updates,
+            updatedAt: new Date()
+        };
+        await firestore.collection('users').doc(uid).set(payload, { merge: true });
+        state.profile = { ...state.profile, ...payload };
+        createToast('Profile saved to Firestore.', 'success');
+        return payload;
+    } catch (error) {
+        createToast(error.message || 'Unable to save your profile.', 'error');
+        throw error;
+    } finally {
+        if (button) {
+            button.disabled = false;
+            button.textContent = 'Save';
+        }
+    }
+}
+
+async function saveProfile() {
+    try {
+        const name = document.getElementById('profileName').value.trim();
+        const phone = document.getElementById('profilePhone').value.trim();
+        const vehicleType = document.getElementById('profileVehicleType').value;
+        const vehiclePlate = document.getElementById('profileVehiclePlate').value.trim();
+        await updateUserProfile(state.authUser.uid, { displayName: name, phone, vehicleType, vehiclePlate });
+    } catch (error) {
+        createToast(error.message, 'error');
+    }
+}
+
+async function refreshData() {
+    renderAll();
+    createToast('Data refreshed.', 'success');
+}
+
+async function openChat(orderId) {
+    state.selectedOrder = state.allOrders.find((entry) => entry.id === orderId);
+    if (!state.selectedOrder) return;
+    elements.modalTitle.textContent = `Chat for #${state.selectedOrder.orderNumber || orderId.slice(0, 6)}`;
+    elements.modalBody.innerHTML = `
+    <div id="chatMessages" class="chat-list"></div>
+    <form id="chatForm" class="form-grid">
+      <textarea id="chatInput" placeholder="Send a message to the restaurant or customer..."></textarea>
+      <button class="primary-btn" type="submit">Send</button>
+    </form>`;
+    elements.modalBackdrop.classList.remove('hidden');
+    await loadChatMessages(orderId);
+    document.getElementById('chatForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const text = document.getElementById('chatInput').value.trim();
+        if (!text) return;
+        await firestore.collection('orders').doc(orderId).collection('messages').add({ text, senderRole: 'delivery_person', createdAt: new Date(), senderUid: state.authUser.uid });
+        document.getElementById('chatInput').value = '';
+    });
+}
+
+function loadChatMessages(orderId) {
+    if (state.chatsUnsubscribe) state.chatsUnsubscribe();
+    state.chatsUnsubscribe = firestore.collection('orders').doc(orderId).collection('messages').orderBy('createdAt', 'asc').onSnapshot((snapshot) => {
+        state.chatMessages = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        document.getElementById('chatMessages').innerHTML = state.chatMessages.length ? state.chatMessages.map((message) => `
+      <div class="chat-bubble">
+        <strong>${message.senderRole === 'delivery_person' ? 'You' : message.senderRole}</strong>
+        <div>${message.text}</div>
+        <div class="muted">${formatDate(message.createdAt)}</div>
+      </div>`).join('') : '<div class="empty-state">No messages yet.</div>';
+    });
+}
+
+function openModal(title, body) {
+    elements.modalTitle.textContent = title;
+    elements.modalBody.innerHTML = body;
+    elements.modalBackdrop.classList.remove('hidden');
+    elements.modalBackdrop.setAttribute('aria-hidden', 'false');
+    elements.modalClose.addEventListener('click', closeModal);
+    window.addEventListener('keydown', handleModalEscape);
+}
+
+function closeModal() {
+    elements.modalBackdrop.classList.add('hidden');
+    elements.modalBody.innerHTML = '';
+    elements.modalTitle.textContent = 'Dialog';
+    elements.modalBackdrop.setAttribute('aria-hidden', 'true');
+    window.removeEventListener('keydown', handleModalEscape);
+}
+
+function handleModalEscape(event) {
+    if (event.key === 'Escape') {
+        closeModal();
+    }
+}
+
+function toggleSupportModal() {
+    if (!elements.modalBackdrop.classList.contains('hidden') && elements.modalTitle.textContent === 'Help & support') {
+        closeModal();
+        return;
+    }
+    openSupportModal();
+}
+
+function openSupportModal() {
+    openModal('Help & support', `
+      <form id="supportForm" class="form-grid" style="padding:8px 0;">
+        <label>Topic<select name="category"><option value="delivery">Delivery issue</option><option value="payment">Payment</option><option value="account">Account</option><option value="other">Other</option></select></label>
+        <label>Message<textarea name="message" required placeholder="Describe what you need help with."></textarea></label>
+        <label>Email<input name="email" value="${state.profile?.email || state.authUser?.email || ''}" /></label>
+        <div class="row-actions">
+          <button class="primary-btn" id="submitSupport" type="button">Send request</button>
+          <button class="ghost-btn" id="cancelSupport" type="button">Cancel</button>
+        </div>
+      </form>
+    `);
+
+    document.getElementById('submitSupport').addEventListener('click', async () => {
+        const form = document.getElementById('supportForm');
+        const data = new FormData(form);
+        const payload = {
+            panel: 'delivery',
+            category: String(data.get('category') || 'other'),
+            message: String(data.get('message') || '').trim(),
+            email: String(data.get('email') || state.profile?.email || state.authUser?.email || '').trim(),
+            userId: state.authUser?.uid || '',
+            status: 'new',
+            createdAt: new Date()
+        };
+        if (!payload.message) {
+            createToast('Please describe your issue before sending.', 'warning');
+            return;
+        }
+        try {
+            await firestore.collection('supportRequests').add(payload);
+            createToast('Support request sent. We will follow up shortly.', 'success');
+            closeModal();
+        } catch (error) {
+            createToast(error.message || 'Unable to send support request.', 'error');
+        }
+    });
+    document.getElementById('cancelSupport').addEventListener('click', closeModal);
+}
+
+async function createNotification(recipientUid, title, message, type = 'system') {
+    if (!recipientUid) return;
+    await firestore.collection('notifications').add({ recipientUid, title, message, type, read: false, isDeleted: false, createdAt: new Date() });
+}
+
+function getImagePath(filename, folder = 'products') {
+    if (!filename) return './images/placeholders/wrap.jpg';
+    const normalized = String(filename).trim();
+    if (!normalized) return './images/placeholders/wrap.jpg';
+    if (/^https?:\/\//i.test(normalized)) return normalized;
+    if (normalized.startsWith('./') || normalized.startsWith('../') || normalized.startsWith('/')) return normalized.replace(/^\.\//, '').startsWith('images/') ? `./${normalized.replace(/^\.\//, '')}` : normalized;
+    if (normalized.startsWith('images/')) return `./${normalized}`;
+    return `./images/${folder}/${normalized}`;
+}
+
+document.addEventListener('DOMContentLoaded', init);
