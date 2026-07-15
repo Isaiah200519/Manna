@@ -108,7 +108,10 @@ function bindEvents() {
             saveProfile();
         });
     }
-    elements.notificationBell.addEventListener('click', () => toggleNotifications());
+    elements.notificationBell.addEventListener('click', () => {
+        showSection('notifications');
+        setMobileNavOpen(false);
+    });
     elements.supportButton?.addEventListener('click', toggleSupportModal);
     if (elements.mobileNavToggle) {
         const openMobileMenu = (event) => {
@@ -737,7 +740,8 @@ function renderHeaderNotifications() {
 }
 
 function toggleNotifications() {
-    elements.notificationDropdown.classList.toggle('hidden');
+    showSection('notifications');
+    setMobileNavOpen(false);
 }
 
 function showSection(section) {

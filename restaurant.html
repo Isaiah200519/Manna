@@ -41,6 +41,10 @@
                     <p>Restaurant Control Panel</p>
                 </div>
             </div>
+            <a href="./index.html" class="auth-back-link">
+                <span class="back-icon" aria-hidden="true">←</span>
+                <span>Back to default login</span>
+            </a>
             <form id="loginForm" class="auth-form">
                 <label>
                     Email
@@ -260,6 +264,10 @@
                     </div>
                 </div>
                 <div class="topbar-actions">
+                    <button id="notificationsToggle" class="icon-btn" aria-label="Notifications">
+                        <span>🔔</span>
+                        <span id="notificationBadgeCount" class="badge hidden">0</span>
+                    </button>
                     <button id="supportButton" class="ghost-btn">Help</button>
                     <div id="userBadge" class="user-badge"></div>
                 </div>

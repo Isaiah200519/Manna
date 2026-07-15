@@ -2,6 +2,7 @@
 
 :root {
     color-scheme: dark;
+    --app-height: 100dvh;
     --bg-main: #121212;
     --bg-surface: #1e1e1e;
     --bg-input: #262626;
@@ -36,13 +37,11 @@
     --shadow-glow: 0 0 20px var(--accent-glow);
 }
 
-/* hide header hamburger/menu toggles on very small screens — footer controls remain */
+/* keep the mobile header toggle visible so the sidebar can be opened on compact screens */
 @media (max-width: 767px) {
 
     #menuToggle,
-    #mobileNavToggle,
-    .icon-btn#menuToggle,
-    .icon-btn#mobileNavToggle {
+    .icon-btn#menuToggle {
         display: none !important;
     }
 }
@@ -59,13 +58,26 @@ html {
 }
 
 body {
-    min-height: 100vh;
+    min-height: var(--app-height);
     overflow-x: hidden;
     background: radial-gradient(circle at top left, rgba(249, 115, 22, 0.16), transparent 32%), var(--bg-main);
     color: var(--text-main);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     padding-bottom: 88px;
+}
+
+.auth-screen,
+.app-shell {
+    min-height: var(--app-height);
+}
+
+.main-panel,
+.section-panel,
+.panel-card,
+.page-header,
+.topbar {
+    min-width: 0;
 }
 
 img {
@@ -436,6 +448,41 @@ textarea:focus-visible {
 
 .auth-card p {
     color: var(--text-muted);
+}
+
+.auth-back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    width: fit-content;
+    padding: 8px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--radius-pill);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    transition: transform var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.auth-back-link:hover {
+    transform: translateY(-1px);
+    color: var(--text-main);
+    background: rgba(249, 115, 22, 0.12);
+    border-color: rgba(249, 115, 22, 0.35);
+}
+
+.auth-back-link .back-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(249, 115, 22, 0.16);
+    color: var(--accent);
+    font-size: 12px;
 }
 
 .auth-form {

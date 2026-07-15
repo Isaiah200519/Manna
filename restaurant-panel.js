@@ -47,12 +47,13 @@ const mobileMenuButton = document.getElementById('mobileMenuButton');
 const sidebar = document.getElementById('sidebar');
 const sidebarBackdrop = document.getElementById('sidebarBackdrop');
 const sidebarClose = document.getElementById('sidebarClose');
-const navItems = Array.from(document.querySelectorAll('.nav-item[data-section], .mobile-nav-item[data-section]'));
+const navItems = Array.from(document.querySelectorAll('.nav-item[data-section]'));
 const sectionPanels = Array.from(document.querySelectorAll('.section-panel'));
 const pageTitle = document.getElementById('pageTitle');
 const pageSubtitle = document.getElementById('pageSubtitle');
 const userBadge = document.getElementById('userBadge');
 const supportButton = document.getElementById('supportButton');
+const notificationsToggle = document.getElementById('notificationsToggle');
 const modalBackdrop = document.getElementById('modalBackdrop');
 const modalTitle = document.getElementById('modalTitle');
 const modalBody = document.getElementById('modalBody');
@@ -128,15 +129,17 @@ function bindEvents() {
     document.getElementById('mobileLogoutButton')?.addEventListener('click', handleLogout);
     navItems.forEach((button) => {
         button.addEventListener('click', () => {
-            showSection(button.dataset.section);
-            if (window.innerWidth <= 780) {
-                setMobileNavOpen(false);
+            const section = button.dataset.section;
+            if (section) {
+                showSection(section);
+                if (window.innerWidth <= 780) {
+                    setMobileNavOpen(false);
+                }
             }
         });
-        // sync mobile items and update badge
-        syncMobileNavItems();
-        updateNotificationBadge();
     });
+    syncMobileNavItems();
+    updateNotificationBadge();
     document.querySelectorAll('[data-section]').forEach((button) => {
         button.addEventListener('click', () => showSection(button.dataset.section));
     });
@@ -183,6 +186,12 @@ function bindEvents() {
     document.getElementById('saveProfileButton').addEventListener('click', saveProfile);
     document.getElementById('saveSettingsButton').addEventListener('click', saveSettings);
     supportButton?.addEventListener('click', toggleSupportModal);
+    notificationsToggle?.addEventListener('click', () => {
+        showSection('notifications');
+        if (window.innerWidth <= 780) {
+            setMobileNavOpen(false);
+        }
+    });
     document.getElementById('createPromotionButton').addEventListener('click', openPromotionModal);
     document.getElementById('createCouponButton').addEventListener('click', openCouponModal);
     document.getElementById('bulkActivateButton').addEventListener('click', () => bulkUpdateMenu(true));
@@ -229,44 +238,58 @@ function setMobileNavOpen(isOpen) {
 function syncMobileNavItems() {
     const mobileList = document.querySelector('.mobile-nav-list');
     if (!mobileList) return;
-    const desktopItems = Array.from(document.querySelectorAll('.nav-item[data-section]')).filter(i => !i.closest('.mobile-nav-list'));
-    desktopItems.forEach((item) => {
-        const section = item.getAttribute('data-section');
-        if (!section) return;
-        if (mobileList.querySelector(`.mobile-nav-item[data-section="${section}"]`)) return;
+
+    const desktopItems = Array.from(document.querySelectorAll('.nav-item[data-section]'))
+        .filter((item) => !item.closest('.mobile-nav-list'));
+
+    const preferredSections = [
+        'dashboard', 'profile', 'catalog', 'menu', 'orders', 'reviews', 'promotions',
+        'coupons', 'analytics', 'notifications', 'settings', 'chat'
+    ];
+
+    const sections = Array.from(new Set([...preferredSections, ...desktopItems.map((item) => item.getAttribute('data-section')).filter(Boolean)]));
+
+    mobileList.innerHTML = '';
+    sections.forEach((section) => {
+        const sourceItem = desktopItems.find((item) => item.getAttribute('data-section') === section);
         const mobileBtn = document.createElement('button');
         mobileBtn.className = 'nav-item mobile-nav-item';
         mobileBtn.setAttribute('data-section', section);
-        const icon = item.querySelector('.nav-icon')?.innerHTML || '';
-        const label = item.textContent.trim() || section;
+        const icon = sourceItem?.querySelector('.nav-icon')?.innerHTML || '';
+        const label = sourceItem?.textContent.trim() || section;
         mobileBtn.innerHTML = `<span class="nav-icon">${icon}</span><span>${label}</span>`;
         mobileList.appendChild(mobileBtn);
     });
-    mobileList.addEventListener('click', (e) => {
-        const btn = e.target.closest('.mobile-nav-item');
-        if (!btn) return;
-        const section = btn.getAttribute('data-section');
-        if (section) {
-            setActiveNavigation(section);
-            showSection && showSection(section);
-            setMobileNavOpen(false);
-        }
-    });
-    // dedupe any duplicate entries
-    const seen = new Set();
-    Array.from(mobileList.querySelectorAll('.mobile-nav-item')).forEach((el) => {
-        const s = el.getAttribute('data-section');
-        if (!s) return;
-        if (seen.has(s)) el.remove(); else seen.add(s);
-    });
+
+    if (!mobileList.dataset.boundMobileNav) {
+        mobileList.addEventListener('click', (event) => {
+            const button = event.target.closest('.mobile-nav-item[data-section]');
+            if (!button) return;
+            const section = button.getAttribute('data-section');
+            if (section) {
+                showSection(section);
+                if (window.innerWidth <= 780) {
+                    setMobileNavOpen(false);
+                }
+            }
+        });
+        mobileList.dataset.boundMobileNav = 'true';
+    }
 }
 
 function updateNotificationBadge() {
-    const badge = document.getElementById('notificationBadge') || document.getElementById('notificationCount');
-    if (!badge) return;
-    const count = (state.notifications || state.data?.notifications || []).filter(n => !n.read).length;
-    badge.textContent = count || '';
-    badge.style.display = count ? 'inline-flex' : 'none';
+    const count = (state.notifications || []).filter((item) => !item.read).length;
+    const sectionBadge = document.getElementById('notificationBadge');
+    const headerBadge = document.getElementById('notificationBadgeCount');
+
+    if (sectionBadge) {
+        sectionBadge.textContent = count ? `${count} unread` : '0 unread';
+    }
+
+    if (headerBadge) {
+        headerBadge.textContent = `${count}`;
+        headerBadge.classList.toggle('hidden', count === 0);
+    }
 }
 
 function setActiveNavigation(section) {
