@@ -44,6 +44,9 @@ const mobileNavToggle = document.getElementById('mobileNavToggle');
 const mobileNavSheet = document.getElementById('mobileNavSheet');
 const mobileNavClose = document.getElementById('mobileNavClose');
 const mobileMenuButton = document.getElementById('mobileMenuButton');
+const sidebar = document.getElementById('sidebar');
+const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+const sidebarClose = document.getElementById('sidebarClose');
 const navItems = Array.from(document.querySelectorAll('.nav-item[data-section], .mobile-nav-item[data-section]'));
 const sectionPanels = Array.from(document.querySelectorAll('.section-panel'));
 const pageTitle = document.getElementById('pageTitle');
@@ -103,6 +106,12 @@ function bindEvents() {
     if (mobileNavClose) {
         mobileNavClose.addEventListener('click', () => setMobileNavOpen(false));
     }
+    if (sidebarClose) {
+        sidebarClose.addEventListener('click', () => setMobileNavOpen(false));
+    }
+    if (sidebarBackdrop) {
+        sidebarBackdrop.addEventListener('click', () => setMobileNavOpen(false));
+    }
     if (mobileMenuButton) {
         mobileMenuButton.addEventListener('click', () => setMobileNavOpen(true));
     }
@@ -113,6 +122,7 @@ function bindEvents() {
             }
         });
     }
+    document.getElementById('mobileLogoutButton')?.addEventListener('click', handleLogout);
     navItems.forEach((button) => {
         button.addEventListener('click', () => {
             showSection(button.dataset.section);
@@ -120,6 +130,9 @@ function bindEvents() {
                 setMobileNavOpen(false);
             }
         });
+        // sync mobile items and update badge
+        syncMobileNavItems();
+        updateNotificationBadge();
     });
     document.querySelectorAll('[data-section]').forEach((button) => {
         button.addEventListener('click', () => showSection(button.dataset.section));
@@ -196,10 +209,61 @@ function bindEvents() {
 }
 
 function setMobileNavOpen(isOpen) {
-    if (!mobileNavSheet) return;
-    mobileNavSheet.classList.toggle('open', isOpen);
-    mobileNavSheet.setAttribute('aria-hidden', String(!isOpen));
+    if (mobileNavSheet) {
+        mobileNavSheet.classList.remove('open');
+        mobileNavSheet.setAttribute('aria-hidden', 'true');
+    }
+    if (sidebar) {
+        sidebar.classList.toggle('open', isOpen);
+    }
+    if (sidebarBackdrop) {
+        sidebarBackdrop.classList.toggle('open', isOpen);
+    }
     document.body.style.overflow = isOpen ? 'hidden' : '';
+}
+
+// ensure mobile nav mirrors desktop nav
+function syncMobileNavItems() {
+    const mobileList = document.querySelector('.mobile-nav-list');
+    if (!mobileList) return;
+    const desktopItems = Array.from(document.querySelectorAll('.nav-item[data-section]')).filter(i => !i.closest('.mobile-nav-list'));
+    desktopItems.forEach((item) => {
+        const section = item.getAttribute('data-section');
+        if (!section) return;
+        if (mobileList.querySelector(`.mobile-nav-item[data-section="${section}"]`)) return;
+        const mobileBtn = document.createElement('button');
+        mobileBtn.className = 'nav-item mobile-nav-item';
+        mobileBtn.setAttribute('data-section', section);
+        const icon = item.querySelector('.nav-icon')?.innerHTML || '';
+        const label = item.textContent.trim() || section;
+        mobileBtn.innerHTML = `<span class="nav-icon">${icon}</span><span>${label}</span>`;
+        mobileList.appendChild(mobileBtn);
+    });
+    mobileList.addEventListener('click', (e) => {
+        const btn = e.target.closest('.mobile-nav-item');
+        if (!btn) return;
+        const section = btn.getAttribute('data-section');
+        if (section) {
+            setActiveNavigation(section);
+            showSection && showSection(section);
+            setMobileNavOpen(false);
+        }
+    });
+    // dedupe any duplicate entries
+    const seen = new Set();
+    Array.from(mobileList.querySelectorAll('.mobile-nav-item')).forEach((el) => {
+        const s = el.getAttribute('data-section');
+        if (!s) return;
+        if (seen.has(s)) el.remove(); else seen.add(s);
+    });
+}
+
+function updateNotificationBadge() {
+    const badge = document.getElementById('notificationBadge') || document.getElementById('notificationCount');
+    if (!badge) return;
+    const count = (state.notifications || state.data?.notifications || []).filter(n => !n.read).length;
+    badge.textContent = count || '';
+    badge.style.display = count ? 'inline-flex' : 'none';
 }
 
 function setActiveNavigation(section) {

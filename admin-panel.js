@@ -53,6 +53,10 @@ const mobileNavSheet = document.getElementById('mobileNavSheet');
 const mobileNavClose = document.getElementById('mobileNavClose');
 const mobileMenuButton = document.getElementById('mobileMenuButton');
 const mobileBottomNav = document.getElementById('mobileBottomNav');
+const sidebar = document.getElementById('sidebar');
+const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+const sidebarClose = document.getElementById('sidebarClose');
+const menuToggle = document.getElementById('menuToggle');
 
 function seedData() {
   const existing = localStorage.getItem('manna-admin-state');
@@ -153,10 +157,65 @@ function renderPageLayout(title, subtitle, actions = '', body = '') {
 }
 
 function setMobileNavOpen(isOpen) {
-  if (!mobileNavSheet) return;
-  mobileNavSheet.classList.toggle('open', isOpen);
-  mobileNavSheet.setAttribute('aria-hidden', String(!isOpen));
+  if (mobileNavSheet) {
+    mobileNavSheet.classList.remove('open');
+    mobileNavSheet.setAttribute('aria-hidden', 'true');
+  }
+  if (sidebar) {
+    sidebar.classList.toggle('open', isOpen);
+  }
+  if (sidebarBackdrop) {
+    sidebarBackdrop.classList.toggle('open', isOpen);
+  }
   document.body.style.overflow = isOpen ? 'hidden' : '';
+}
+
+function syncMobileNavItems() {
+  const mobileList = document.querySelector('.mobile-nav-list');
+  if (!mobileList) return;
+  const desktopItems = Array.from(document.querySelectorAll('.nav-item[data-section]')).filter(i => !i.closest('.mobile-nav-list'));
+  desktopItems.forEach((item) => {
+    const section = item.getAttribute('data-section');
+    if (!section) return;
+    if (mobileList.querySelector(`.mobile-nav-item[data-section="${section}"]`)) return;
+    const mobileBtn = document.createElement('button');
+    mobileBtn.className = 'nav-item mobile-nav-item';
+    mobileBtn.setAttribute('data-section', section);
+    const icon = item.querySelector('.nav-icon')?.innerHTML || '';
+    const label = item.textContent.trim() || section;
+    mobileBtn.innerHTML = `<span class="nav-icon">${icon}</span><span>${label}</span>`;
+    mobileList.appendChild(mobileBtn);
+  });
+  // delegate click handling for dynamic items
+  mobileList.addEventListener('click', (e) => {
+    const btn = e.target.closest('.mobile-nav-item');
+    if (!btn) return;
+    const section = btn.getAttribute('data-section');
+    if (section) {
+      setActiveNavigation(section);
+      openSection && openSection(section);
+      setMobileNavOpen(false);
+    }
+  });
+  // remove duplicate mobile entries if any (keep first)
+  const seen = new Set();
+  Array.from(mobileList.querySelectorAll('.mobile-nav-item')).forEach((el) => {
+    const s = el.getAttribute('data-section');
+    if (!s) return;
+    if (seen.has(s)) {
+      el.remove();
+    } else {
+      seen.add(s);
+    }
+  });
+}
+
+function updateNotificationBadge() {
+  const badge = document.getElementById('notificationBadge');
+  if (!badge) return;
+  const count = (state.data.notifications || []).filter(n => !n.read).length;
+  badge.textContent = count || '';
+  badge.style.display = count ? 'inline-flex' : 'none';
 }
 
 function setActiveNavigation(section) {
@@ -182,9 +241,15 @@ function attachEvents() {
     }
   });
 
-  document.getElementById('menuToggle').addEventListener('click', () => setMobileNavOpen(true));
+  menuToggle?.addEventListener('click', () => setMobileNavOpen(true));
   if (mobileNavClose) {
     mobileNavClose.addEventListener('click', () => setMobileNavOpen(false));
+  }
+  if (sidebarClose) {
+    sidebarClose.addEventListener('click', () => setMobileNavOpen(false));
+  }
+  if (sidebarBackdrop) {
+    sidebarBackdrop.addEventListener('click', () => setMobileNavOpen(false));
   }
   if (mobileMenuButton) {
     mobileMenuButton.addEventListener('click', () => setMobileNavOpen(true));
@@ -196,6 +261,10 @@ function attachEvents() {
       }
     });
   }
+  // Ensure mobile menu contains all nav entries from desktop
+  syncMobileNavItems();
+  // initial badge update
+  updateNotificationBadge();
 
   document.getElementById('themeToggle').addEventListener('click', () => {
     state.theme = state.theme === 'dark' ? 'light' : 'dark';
@@ -211,9 +280,14 @@ function attachEvents() {
       openSupportModal();
     }
   });
-  document.getElementById('notificationsToggle').addEventListener('click', () => openSection('notifications'));
+  document.getElementById('notificationsToggle').addEventListener('click', () => {
+    // mark all notifications read and open the notifications section
+    (state.data.notifications || []).forEach(n => { n.read = true; });
+    updateNotificationBadge();
+    openSection && openSection('notifications');
+  });
   document.getElementById('messagesButton').addEventListener('click', () => createToast('Messaging hub is ready for the next release.', 'info'));
-  document.getElementById('logoutButton').addEventListener('click', () => {
+  const adminLogout = () => {
     const { auth } = initFirebase();
     if (auth) {
       auth.signOut().catch(() => { });
@@ -221,7 +295,9 @@ function attachEvents() {
     localStorage.removeItem('manna-auth');
     createToast('You have been logged out.', 'warning');
     window.location.reload();
-  });
+  };
+  document.getElementById('logoutButton').addEventListener('click', adminLogout);
+  document.getElementById('logoutButtonSheet')?.addEventListener('click', adminLogout);
 
   window.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
@@ -771,7 +847,7 @@ function renderDashboard() {
     }
   });
 
-  notificationBadge.textContent = state.data.notifications.filter((item) => !item.read).length;
+  updateNotificationBadge();
 }
 
 function renderProducts() {
@@ -1766,7 +1842,7 @@ window.markNotificationRead = (notificationId) => {
   persistData();
   createToast('Notification marked as read.', 'success');
   renderNotifications();
-  notificationBadge.textContent = state.data.notifications.filter((item) => !item.read).length;
+  updateNotificationBadge();
 };
 
 window.deleteNotification = (notificationId) => {
@@ -1774,7 +1850,7 @@ window.deleteNotification = (notificationId) => {
   persistData();
   createToast('Notification removed.', 'warning');
   renderNotifications();
-  notificationBadge.textContent = state.data.notifications.filter((item) => !item.read).length;
+  updateNotificationBadge();
 };
 
 function renderSettings() {

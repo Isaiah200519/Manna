@@ -41,6 +41,9 @@ const elements = {
     mobileNavSheet: document.getElementById('mobileNavSheet'),
     mobileNavClose: document.getElementById('mobileNavClose'),
     mobileMenuButton: document.getElementById('mobileMenuButton'),
+    sidebar: document.getElementById('sidebar'),
+    sidebarBackdrop: document.getElementById('sidebarBackdrop'),
+    sidebarClose: document.getElementById('sidebarClose'),
     pageTitle: document.getElementById('pageTitle'),
     pageSubtitle: document.getElementById('pageSubtitle'),
     pageHeading: document.getElementById('pageHeading'),
@@ -120,6 +123,12 @@ function bindEvents() {
             setMobileNavOpen(false);
         });
     }
+    if (elements.sidebarClose) {
+        elements.sidebarClose.addEventListener('click', () => setMobileNavOpen(false));
+    }
+    if (elements.sidebarBackdrop) {
+        elements.sidebarBackdrop.addEventListener('click', () => setMobileNavOpen(false));
+    }
     if (elements.mobileMenuButton) {
         elements.mobileMenuButton.addEventListener('click', (event) => {
             event.preventDefault();
@@ -134,6 +143,60 @@ function bindEvents() {
             }
         });
     }
+    // sync desktop nav into mobile menu
+    (function syncMobileNavItems() {
+        const mobileList = document.querySelector('.mobile-nav-list');
+        if (!mobileList) return;
+        const desktopItems = Array.from(document.querySelectorAll('.nav-item[data-section]')).filter(i => !i.closest('.mobile-nav-list'));
+        desktopItems.forEach(item => {
+            const section = item.getAttribute('data-section');
+            if (!section) return;
+            if (mobileList.querySelector(`.mobile-nav-item[data-section="${section}"]`)) return;
+            const mobileBtn = document.createElement('button');
+            mobileBtn.className = 'nav-item mobile-nav-item';
+            mobileBtn.setAttribute('data-section', section);
+            const icon = item.querySelector('.nav-icon')?.innerHTML || '';
+            const label = item.textContent.trim() || section;
+            mobileBtn.innerHTML = `<span class="nav-icon">${icon}</span><span>${label}</span>`;
+            mobileList.appendChild(mobileBtn);
+        });
+        mobileList.addEventListener('click', (e) => {
+            const btn = e.target.closest('.mobile-nav-item');
+            if (!btn) return;
+            const section = btn.getAttribute('data-section');
+            if (section) {
+                showSection(section);
+                setMobileNavOpen(false);
+            }
+        });
+        // dedupe mobile entries (keep first occurrence)
+        const seen = new Set();
+        Array.from(mobileList.querySelectorAll('.mobile-nav-item')).forEach((el) => {
+            const s = el.getAttribute('data-section');
+            if (!s) return;
+            if (seen.has(s)) el.remove(); else seen.add(s);
+        });
+    })();
+
+    // notification badge behavior
+    (function () {
+        const badge = document.getElementById('notificationCount') || document.getElementById('notificationBadge');
+        if (!badge) return;
+        const getCount = () => (state.notifications || state.data?.notifications || []).filter(n => !n.read).length;
+        const count = getCount();
+        badge.textContent = count || '';
+        badge.style.display = count ? 'inline-flex' : 'none';
+        const toggle = document.getElementById('notificationsToggle');
+        if (toggle) {
+            toggle.addEventListener('click', () => {
+                (state.notifications || state.data?.notifications || []).forEach(n => n.read = true);
+                badge.textContent = '';
+                badge.style.display = 'none';
+                showSection && showSection('notifications');
+            });
+        }
+    })();
+    document.getElementById('mobileLogoutButton')?.addEventListener('click', handleLogout);
     document.querySelectorAll('.nav-item[data-section], .mobile-nav-item[data-section]').forEach((button) => {
         button.addEventListener('click', () => showSection(button.dataset.section));
     });
@@ -180,9 +243,16 @@ function bindEvents() {
 }
 
 function setMobileNavOpen(isOpen) {
-    if (!elements.mobileNavSheet) return;
-    elements.mobileNavSheet.classList.toggle('open', isOpen);
-    elements.mobileNavSheet.setAttribute('aria-hidden', String(!isOpen));
+    if (elements.mobileNavSheet) {
+        elements.mobileNavSheet.classList.remove('open');
+        elements.mobileNavSheet.setAttribute('aria-hidden', 'true');
+    }
+    if (elements.sidebar) {
+        elements.sidebar.classList.toggle('open', isOpen);
+    }
+    if (elements.sidebarBackdrop) {
+        elements.sidebarBackdrop.classList.toggle('open', isOpen);
+    }
     document.body.style.overflow = isOpen ? 'hidden' : '';
 }
 

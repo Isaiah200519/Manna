@@ -49,6 +49,9 @@ const mobileNavToggle = document.getElementById('mobileNavToggle');
 const mobileNavSheet = document.getElementById('mobileNavSheet');
 const mobileNavClose = document.getElementById('mobileNavClose');
 const mobileMenuButton = document.getElementById('mobileMenuButton');
+const sidebar = document.getElementById('sidebar');
+const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+const sidebarClose = document.getElementById('sidebarClose');
 const cartButton = document.getElementById('cartButton');
 const cartCount = document.getElementById('cartCount');
 const navItems = Array.from(document.querySelectorAll('.nav-item[data-section], .mobile-nav-item[data-section]'));
@@ -166,6 +169,12 @@ function bindEvents() {
             setMobileNavOpen(false);
         });
     }
+    if (sidebarClose) {
+        sidebarClose.addEventListener('click', () => setMobileNavOpen(false));
+    }
+    if (sidebarBackdrop) {
+        sidebarBackdrop.addEventListener('click', () => setMobileNavOpen(false));
+    }
     if (mobileMenuButton) {
         mobileMenuButton.addEventListener('click', openMobileMenu);
     }
@@ -176,6 +185,7 @@ function bindEvents() {
             }
         });
     }
+    document.getElementById('mobileLogoutButton')?.addEventListener('click', handleLogout);
     cartButton.addEventListener('click', () => showSection('cart'));
     navItems.forEach((button) => button.addEventListener('click', () => showSection(button.dataset.section)));
     mobileNavButtons.forEach((button) => {
@@ -240,9 +250,16 @@ function bindEvents() {
 }
 
 function setMobileNavOpen(isOpen) {
-    if (!mobileNavSheet) return;
-    mobileNavSheet.classList.toggle('open', isOpen);
-    mobileNavSheet.setAttribute('aria-hidden', String(!isOpen));
+    if (mobileNavSheet) {
+        mobileNavSheet.classList.remove('open');
+        mobileNavSheet.setAttribute('aria-hidden', 'true');
+    }
+    if (sidebar) {
+        sidebar.classList.toggle('open', isOpen);
+    }
+    if (sidebarBackdrop) {
+        sidebarBackdrop.classList.toggle('open', isOpen);
+    }
     document.body.style.overflow = isOpen ? 'hidden' : '';
 }
 
@@ -250,6 +267,58 @@ function setActiveNavigation(section) {
     document.querySelectorAll('.nav-item[data-section], .mobile-nav-item[data-section]').forEach((button) => {
         button.classList.toggle('active', button.getAttribute('data-section') === section);
     });
+    // ensure mobile nav contains all main nav items
+    (function syncMobileNavItems() {
+        const mobileList = document.querySelector('.mobile-nav-list');
+        if (!mobileList) return;
+        const desktopItems = Array.from(document.querySelectorAll('.nav-item[data-section]')).filter(i => !i.closest('.mobile-nav-list'));
+        desktopItems.forEach((item) => {
+            const section = item.getAttribute('data-section');
+            if (!section) return;
+            if (mobileList.querySelector(`.mobile-nav-item[data-section="${section}"]`)) return;
+            const mobileBtn = document.createElement('button');
+            mobileBtn.className = 'nav-item mobile-nav-item';
+            mobileBtn.setAttribute('data-section', section);
+            const icon = item.querySelector('.nav-icon')?.innerHTML || '';
+            const label = item.textContent.trim() || section;
+            mobileBtn.innerHTML = `<span class="nav-icon">${icon}</span><span>${label}</span>`;
+            mobileList.appendChild(mobileBtn);
+        });
+        mobileList.addEventListener('click', (e) => {
+            const btn = e.target.closest('.mobile-nav-item');
+            if (!btn) return;
+            const section = btn.getAttribute('data-section');
+            if (section) {
+                showSection(section);
+                setMobileNavOpen(false);
+            }
+        });
+        // dedupe mobile items
+        const seen = new Set();
+        Array.from(mobileList.querySelectorAll('.mobile-nav-item')).forEach((el) => {
+            const s = el.getAttribute('data-section');
+            if (!s) return;
+            if (seen.has(s)) el.remove(); else seen.add(s);
+        });
+    })();
+
+    // notification badge helper
+    (function updateNotificationBadge() {
+        const badge = document.getElementById('notificationBadge') || document.getElementById('notificationCount');
+        if (!badge) return;
+        const count = (state.notifications || state.data?.notifications || []).filter(n => !n.read).length;
+        badge.textContent = count || '';
+        badge.style.display = count ? 'inline-flex' : 'none';
+        const toggle = document.getElementById('notificationsToggle');
+        if (toggle) {
+            toggle.addEventListener('click', () => {
+                (state.notifications || state.data?.notifications || []).forEach(n => n.read = true);
+                badge.textContent = '';
+                badge.style.display = 'none';
+                showSection && showSection('notifications');
+            });
+        }
+    })();
 }
 
 function toggleAuthMode(showRegister) {

@@ -48,13 +48,20 @@
     </div>
 
     <div class="app-shell hidden" id="appShell">
+        <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
         <aside class="sidebar" id="sidebar">
-            <div class="brand">
-                <img src="./images/logo/logo.svg" alt="MANNA logo" />
-                <div>
-                    <h1>MANNA</h1>
-                    <p>Admin Console</p>
+            <div class="brand" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <img src="./images/logo/logo.svg" alt="MANNA logo" />
+                    <div>
+                        <h1>MANNA</h1>
+                        <p>Admin Console</p>
+                    </div>
                 </div>
+                <button class="icon-btn sidebar-close" id="sidebarClose" aria-label="Close sidebar"><svg
+                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                        <path d="M6 6l12 12M18 6L6 18" />
+                    </svg></button>
             </div>
             <nav class="nav-links" aria-label="Sidebar navigation">
                 <button class="nav-item active" data-section="dashboard"><span class="nav-icon"><svg viewBox="0 0 24 24"
@@ -226,18 +233,25 @@
                                 <path d="M7 4h10l2 2v12l-2 2H7l-2-2V6l2-2z" />
                                 <path d="M9 8h6M9 12h6M9 16h4" />
                             </svg></span><span>System Logs</span></button>
-                    <button class="nav-item danger" id="logoutButtonSheet"><span class="nav-icon"><svg
-                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                                <path d="M10 17l-4-4 4-4" />
-                                <path d="M6 13h9" />
-                                <path d="M13 5h4v14h-4" />
-                            </svg></span><span>Logout</span></button>
                 </nav>
+                <div class="mobile-nav-sheet__footer">
+                    <button id="logoutButtonSheet" class="ghost-btn">Logout</button>
+                </div>
             </div>
         </div>
 
         <div class="main-panel">
             <header class="topbar">
+                <div class="topbar-mobile-brand">
+                    <div class="brand-block">
+                        <img src="./images/logo/logo.svg" alt="MANNA logo" class="brand-logo" />
+                        <div>
+                            <h3>MANNA</h3>
+                            <p>Admin Console</p>
+                        </div>
+                    </div>
+                    <span class="user-role">Admin</span>
+                </div>
                 <button class="icon-btn mobile-only" id="menuToggle" aria-label="Toggle sidebar"><svg
                         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                         <path d="M4 7h16" />
