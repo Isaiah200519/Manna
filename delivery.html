@@ -48,7 +48,9 @@
 
             <form id="loginForm" class="auth-form">
                 <label>Email<input id="loginEmail" type="email" required /></label>
-                <label>Password<input id="loginPassword" type="password" required /></label>
+                <label>Password<div class="password-input-wrap"><input id="loginPassword" type="password"
+                            required /><button type="button" class="password-toggle" aria-label="Show password"
+                            title="Show password"></button></div></label>
                 <button type="submit" class="primary-btn">Sign In</button>
                 <button type="button" id="showRegisterButton" class="ghost-btn">Create account</button>
                 <button type="button" id="forgotPasswordButton" class="text-btn">Forgot password?</button>
@@ -58,8 +60,12 @@
                 <label>Full Name<input id="registerName" required /></label>
                 <label>Phone<input id="registerPhone" required /></label>
                 <label>Email<input id="registerEmail" type="email" required /></label>
-                <label>Password<input id="registerPassword" type="password" required /></label>
-                <label>Confirm Password<input id="registerConfirmPassword" type="password" required /></label>
+                <label>Password<div class="password-input-wrap"><input id="registerPassword" type="password"
+                            required /><button type="button" class="password-toggle" aria-label="Show password"
+                            title="Show password"></button></div></label>
+                <label>Confirm Password<div class="password-input-wrap"><input id="registerConfirmPassword"
+                            type="password" required /><button type="button" class="password-toggle"
+                            aria-label="Show password" title="Show password"></button></div></label>
                 <label>Vehicle Type<select id="registerVehicleType">
                         <option value="Bicycle">Bicycle</option>
                         <option value="Motorcycle">Motorcycle</option>
@@ -76,8 +82,8 @@
     <div id="appShell" class="app-shell hidden">
         <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
         <aside class="sidebar" id="sidebar">
-            <div class="brand-block" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-                <div style="display:flex;align-items:center;gap:12px;">
+            <div class="brand-block sidebar-header">
+                <div class="brand-block__content">
                     <img src="./images/logo/logo.svg" alt="MANNA logo" class="brand-logo" />
                     <div>
                         <h2>MANNA</h2>
@@ -414,6 +420,8 @@
     </div>
 
     <script type="module" src="./delivery-panel.js?v=2"></script>
+    <script src="./password-toggle.js"></script>
+    <script src="./password-toggle.js"></script>
 </body>
 
 </html>

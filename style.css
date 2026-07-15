@@ -471,6 +471,43 @@ textarea {
     transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
 }
 
+.password-input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.password-input-wrap input {
+    padding-right: 48px;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-muted);
+    padding: 0;
+}
+
+.password-toggle:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-main);
+}
+
+.password-toggle svg {
+    width: 18px;
+    height: 18px;
+}
+
 input::placeholder,
 textarea::placeholder {
     color: var(--text-muted);
@@ -660,8 +697,15 @@ select {
 .sidebar .sidebar-logo {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: var(--space-sm);
     margin-bottom: var(--space-xl);
+}
+
+.brand-block__content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
 .sidebar h2,
@@ -1032,7 +1076,7 @@ input[type="search"]:focus {
     color: #ffedd5;
 }
 
-..notification-badge {
+.notification-badge {
     position: relative;
     top: 0;
     right: 0;

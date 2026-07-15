@@ -612,7 +612,25 @@ auth-message {
 
 @media (max-width: 720px) {
     .sidebar {
-        display: none;
+        display: flex;
+        position: fixed;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        z-index: 1400;
+        width: min(320px, 84vw);
+        transform: translateX(-102%);
+        transition: transform 220ms ease;
+        border-radius: 0 22px 22px 0;
+        box-shadow: 24px 0 80px rgba(0, 0, 0, 0.35);
+    }
+
+    .sidebar.open {
+        transform: translateX(0);
+    }
+
+    .sidebar .sidebar-close {
+        display: inline-flex;
     }
 
     .mobile-nav {
@@ -647,5 +665,17 @@ auth-message {
     .topbar {
         flex-direction: column;
         align-items: flex-start;
+    }
+
+    .notification-card {
+        padding: 14px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .notification-card.unread {
+        border-color: rgba(249, 115, 22, 0.45);
+        background: rgba(249, 115, 22, 0.12);
     }
 }

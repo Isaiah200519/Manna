@@ -39,7 +39,11 @@
                 </label>
                 <label>
                     Password
-                    <input id="loginPassword" type="password" placeholder="Enter password" required />
+                    <div class="password-input-wrap">
+                        <input id="loginPassword" type="password" placeholder="Enter password" required />
+                        <button type="button" class="password-toggle" aria-label="Show password"
+                            title="Show password"></button>
+                    </div>
                 </label>
                 <button type="submit" class="primary-btn auth-submit">Login</button>
             </form>
@@ -50,8 +54,8 @@
     <div class="app-shell hidden" id="appShell">
         <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
         <aside class="sidebar" id="sidebar">
-            <div class="brand" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-                <div style="display:flex;align-items:center;gap:12px;">
+            <div class="brand sidebar-header">
+                <div class="brand-block__content">
                     <img src="./images/logo/logo.svg" alt="MANNA logo" />
                     <div>
                         <h1>MANNA</h1>
@@ -338,6 +342,8 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-analytics-compat.js"></script>
     <script type="module" src="./admin-panel.js"></script>
+    <script src="./password-toggle.js"></script>
+    <script src="./password-toggle.js"></script>
 </body>
 
 </html>

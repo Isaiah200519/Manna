@@ -1,4 +1,4 @@
-import { initFirebase, isFirebaseReady, subscribeCollection, addDocument, updateDocument, deleteDocument, saveDocument } from './firebase-config.js';
+import { initFirebase, isFirebaseReady, subscribeCollection, addDocument, updateDocument, deleteDocument, saveDocument, clearStoredAuthState } from './firebase-config.js';
 import { formatCurrency, formatDate, escapeHtml, getInitials, createToast, confirmDialog, getImageUrl, getRestaurantImageUrl, slugify } from './utils.js';
 import { DEFAULT_CATEGORY_TAXONOMY, getCategoryDisplayName, getCategoryOptions } from './category-taxonomy.js';
 
@@ -287,14 +287,19 @@ function attachEvents() {
     openSection && openSection('notifications');
   });
   document.getElementById('messagesButton').addEventListener('click', () => createToast('Messaging hub is ready for the next release.', 'info'));
-  const adminLogout = () => {
+  const adminLogout = async () => {
     const { auth } = initFirebase();
-    if (auth) {
-      auth.signOut().catch(() => { });
+    try {
+      if (auth) {
+        await auth.signOut();
+      }
+    } catch (error) {
+      console.warn('[MANNA] Admin logout warning:', error);
+    } finally {
+      clearStoredAuthState();
+      createToast('You have been logged out.', 'warning');
+      window.location.reload();
     }
-    localStorage.removeItem('manna-auth');
-    createToast('You have been logged out.', 'warning');
-    window.location.reload();
   };
   document.getElementById('logoutButton').addEventListener('click', adminLogout);
   document.getElementById('logoutButtonSheet')?.addEventListener('click', adminLogout);

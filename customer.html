@@ -46,7 +46,9 @@
             </div>
             <form id="loginForm" class="auth-form">
                 <label>Email<input id="loginEmail" type="email" required /></label>
-                <label>Password<input id="loginPassword" type="password" required /></label>
+                <label>Password<div class="password-input-wrap"><input id="loginPassword" type="password"
+                            required /><button type="button" class="password-toggle" aria-label="Show password"
+                            title="Show password"></button></div></label>
                 <button type="submit" class="primary-btn">Sign In</button>
                 <button type="button" id="showRegisterButton" class="ghost-btn">Create account</button>
                 <button type="button" id="forgotPasswordButton" class="text-btn">Forgot password?</button>
@@ -55,8 +57,12 @@
                 <label>Full Name<input id="registerName" required /></label>
                 <label>Phone<input id="registerPhone" required /></label>
                 <label>Email<input id="registerEmail" type="email" required /></label>
-                <label>Password<input id="registerPassword" type="password" required /></label>
-                <label>Confirm Password<input id="registerConfirmPassword" type="password" required /></label>
+                <label>Password<div class="password-input-wrap"><input id="registerPassword" type="password"
+                            required /><button type="button" class="password-toggle" aria-label="Show password"
+                            title="Show password"></button></div></label>
+                <label>Confirm Password<div class="password-input-wrap"><input id="registerConfirmPassword"
+                            type="password" required /><button type="button" class="password-toggle"
+                            aria-label="Show password" title="Show password"></button></div></label>
                 <button type="submit" class="primary-btn">Create Account</button>
                 <button type="button" id="showLoginButton" class="ghost-btn">Back to login</button>
             </form>
@@ -67,8 +73,8 @@
     <div id="appShell" class="app-shell hidden">
         <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
         <aside class="sidebar" id="sidebar">
-            <div class="brand-block" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-                <div style="display:flex;align-items:center;gap:12px;">
+            <div class="brand-block sidebar-header">
+                <div class="brand-block__content">
                     <img src="./images/logo/logo.svg" alt="MANNA logo" class="brand-logo" />
                     <div>
                         <h2>MANNA</h2>
@@ -103,6 +109,11 @@
                             <path
                                 d="M12 20l-1-1C6 15.2 3 12.4 3 8.8A4.8 4.8 0 017.8 4c1.4 0 2.8.6 3.7 1.7A4.8 4.8 0 0115.2 4 4.8 4.8 0 0120 8.8c0 3.6-3 6.4-8 10.2l-1 1z" />
                         </svg></span><span>Favorites</span></button>
+                <button class="nav-item" data-section="notifications"><span class="nav-icon"><svg viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M12 4a5 5 0 00-5 5v3l-1 2h12l-1-2V9a5 5 0 00-5-5z" />
+                            <path d="M10 18a2 2 0 104 0" />
+                        </svg></span><span>Notifications</span></button>
                 <button class="nav-item" data-section="profile"><span class="nav-icon"><svg viewBox="0 0 24 24"
                             fill="none" stroke="currentColor" stroke-width="1.8">
                             <path d="M12 12a4 4 0 100-8 4 4 0 000 8z" />
@@ -158,6 +169,11 @@
                                 <path
                                     d="M12 20l-1-1C6 15.2 3 12.4 3 8.8A4.8 4.8 0 017.8 4c1.4 0 2.8.6 3.7 1.7A4.8 4.8 0 0115.2 4 4.8 4.8 0 0120 8.8c0 3.6-3 6.4-8 10.2l-1 1z" />
                             </svg></span><span>Favorites</span></button>
+                    <button class="nav-item mobile-nav-item" data-section="notifications"><span class="nav-icon"><svg
+                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                <path d="M12 4a5 5 0 00-5 5v3l-1 2h12l-1-2V9a5 5 0 00-5-5z" />
+                                <path d="M10 18a2 2 0 104 0" />
+                            </svg></span><span>Notifications</span></button>
                     <button class="nav-item mobile-nav-item" data-section="profile"><span class="nav-icon"><svg
                                 viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                                 <path d="M12 12a4 4 0 100-8 4 4 0 000 8z" />
@@ -201,6 +217,10 @@
                     </div>
                 </div>
                 <div class="topbar-actions">
+                    <button id="notificationsToggle" class="icon-btn" aria-label="Notifications">
+                        <span>🔔</span>
+                        <span id="customerNotificationBadgeCount" class="badge hidden">0</span>
+                    </button>
                     <button id="cartButton" class="primary-btn">Cart (<span id="cartCount">0</span>)</button>
                 </div>
             </header>
@@ -266,6 +286,16 @@
                         </select>
                     </div>
                     <div id="ordersList" class="stack"></div>
+                </div>
+            </section>
+
+            <section id="notificationsSection" class="section-panel">
+                <div class="panel-card">
+                    <div class="panel-card-header">
+                        <h3>Notifications</h3>
+                        <span id="customerNotificationBadge" class="badge">0 unread</span>
+                    </div>
+                    <div id="notificationsList" class="stack"></div>
                 </div>
             </section>
 
@@ -358,6 +388,8 @@
     </div>
 
     <script type="module" src="./customer-panel.js?v=2"></script>
+    <script src="./password-toggle.js"></script>
+    <script src="./password-toggle.js"></script>
 </body>
 
 </html>

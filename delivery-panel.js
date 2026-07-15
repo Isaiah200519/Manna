@@ -1,4 +1,4 @@
-import { initFirebase } from './firebase-config.js';
+import { initFirebase, clearStoredAuthState } from './firebase-config.js';
 import { formatCurrency, formatDate, createToast } from './utils.js';
 
 const state = {
@@ -83,6 +83,9 @@ function init() {
     firebase = initFirebase();
     auth = firebase.auth;
     firestore = firebase.db;
+    if (auth) {
+        auth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL).catch(() => { });
+    }
     if (!auth || !firestore) {
         createToast('Firebase is not ready. Please refresh the page.', 'error');
         return;
@@ -365,6 +368,10 @@ async function handleLogout() {
     clearAuthBootstrapTimer();
     try {
         await auth.signOut();
+    } catch (error) {
+        console.warn('[MANNA] Logout warning:', error);
+    } finally {
+        clearStoredAuthState();
         cleanupListeners();
         state.profile = null;
         state.restaurants = [];
@@ -372,8 +379,6 @@ async function handleLogout() {
         state.notifications = [];
         elements.authScreen.classList.remove('hidden');
         elements.appShell.classList.add('hidden');
-    } catch (error) {
-        console.error(error);
     }
 }
 
@@ -709,8 +714,11 @@ function renderSettings() {
 }
 
 function renderNotifications() {
-    document.getElementById('notificationsList').innerHTML = state.notifications.filter((item) => !item.isDeleted).length ? state.notifications.filter((item) => !item.isDeleted).map((item) => `
-    <div class="item-card">
+    const list = document.getElementById('notificationsList');
+    if (!list) return;
+    const visible = state.notifications.filter((item) => !item.isDeleted);
+    list.innerHTML = visible.length ? visible.map((item) => `
+    <div class="item-card notification-card ${item.read ? '' : 'unread'}">
       <div class="panel-card-header"><strong>${item.title || 'Update'}</strong><span class="badge">${item.type || 'system'}</span></div>
       <div class="muted">${item.message || ''}</div>
       <div class="muted">${formatDate(item.createdAt)}</div>
@@ -725,7 +733,7 @@ function renderHeaderNotifications() {
     const unread = state.notifications.filter((item) => !item.isDeleted && !item.read).length;
     elements.notificationCount.textContent = unread;
     elements.notificationCount.classList.toggle('hidden', unread === 0);
-    elements.notificationDropdown.innerHTML = state.notifications.filter((item) => !item.isDeleted).length ? state.notifications.filter((item) => !item.isDeleted).slice(0, 5).map((item) => `<div class="item-card"><strong>${item.title || 'Update'}</strong><div class="muted">${item.message || ''}</div></div>`).join('') : '<div class="empty-state">No recent updates.</div>';
+    elements.notificationDropdown.innerHTML = state.notifications.filter((item) => !item.isDeleted).length ? state.notifications.filter((item) => !item.isDeleted).slice(0, 5).map((item) => `<div class="item-card notification-card ${item.read ? '' : 'unread'}"><strong>${item.title || 'Update'}</strong><div class="muted">${item.message || ''}</div></div>`).join('') : '<div class="empty-state">No recent updates.</div>';
 }
 
 function toggleNotifications() {

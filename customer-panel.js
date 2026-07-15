@@ -1,4 +1,4 @@
-import { initFirebase } from './firebase-config.js';
+import { initFirebase, clearStoredAuthState } from './firebase-config.js';
 import { formatCurrency, formatDate, createToast, getImageUrl, getRestaurantImageUrl } from './utils.js';
 import { DEFAULT_CATEGORY_TAXONOMY, getCategoryDisplayName, getCategoryOptions } from './category-taxonomy.js';
 
@@ -33,7 +33,8 @@ const state = {
     searchQuery: '',
     filters: { category: 'all', sort: 'rating' },
     orderFilter: 'all',
-    deliveryFee: 60
+    deliveryFee: 60,
+    notifications: []
 };
 
 const authScreen = document.getElementById('authScreen');
@@ -49,6 +50,9 @@ const mobileNavToggle = document.getElementById('mobileNavToggle');
 const mobileNavSheet = document.getElementById('mobileNavSheet');
 const mobileNavClose = document.getElementById('mobileNavClose');
 const mobileMenuButton = document.getElementById('mobileMenuButton');
+const notificationsToggle = document.getElementById('notificationsToggle');
+const customerNotificationBadge = document.getElementById('customerNotificationBadge');
+const customerNotificationBadgeCount = document.getElementById('customerNotificationBadgeCount');
 const sidebar = document.getElementById('sidebar');
 const sidebarBackdrop = document.getElementById('sidebarBackdrop');
 const sidebarClose = document.getElementById('sidebarClose');
@@ -140,6 +144,9 @@ function init() {
     firebase = initFirebase();
     auth = firebase.auth;
     firestore = firebase.db;
+    if (auth) {
+        auth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL).catch(() => { });
+    }
     if (!auth || !firestore) {
         createToast('Firebase is not ready yet. Please refresh.', 'error');
         return;
@@ -187,6 +194,11 @@ function bindEvents() {
     }
     document.getElementById('mobileLogoutButton')?.addEventListener('click', handleLogout);
     cartButton.addEventListener('click', () => showSection('cart'));
+    if (notificationsToggle) {
+        notificationsToggle.addEventListener('click', () => {
+            showSection('notifications');
+        });
+    }
     navItems.forEach((button) => button.addEventListener('click', () => showSection(button.dataset.section)));
     mobileNavButtons.forEach((button) => {
         if (!button.dataset.section) return;
@@ -399,12 +411,14 @@ async function handleLogout() {
     clearAuthBootstrapTimer();
     try {
         await auth.signOut();
+    } catch (error) {
+        console.warn('[MANNA] Logout warning:', error);
+    } finally {
+        clearStoredAuthState();
         state.authUser = null;
         state.customerProfile = null;
         authScreen.classList.remove('hidden');
         appShell.classList.add('hidden');
-    } catch (error) {
-        console.error(error);
     }
 }
 
@@ -442,6 +456,9 @@ async function handleAuthStateChange(user) {
         authScreen.classList.add('hidden');
         appShell.classList.remove('hidden');
         await loadCustomerData();
+        if (state.notifications.length) {
+            renderNotifications();
+        }
     } catch (error) {
         console.error(error);
         createToast(error.message || 'Could not load customer dashboard.', 'error');
@@ -496,6 +513,12 @@ function setupRealtimeListeners(userId) {
         renderFavorites();
     }, (error) => {
         console.error('[MANNA] Customer favorites listener failed:', error);
+    });
+    firestore.collection('notifications').where('recipientUid', '==', userId).orderBy('createdAt', 'desc').onSnapshot((snapshot) => {
+        state.notifications = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        renderNotifications();
+    }, (error) => {
+        console.error('[MANNA] Customer notifications listener failed:', error);
     });
     state.addressesUnsubscribe = firestore.collection('users').doc(userId).collection('addresses').onSnapshot((snapshot) => {
         state.addresses = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
@@ -585,6 +608,7 @@ function renderAll() {
     renderRestaurants();
     renderOrders();
     renderFavorites();
+    renderNotifications();
     renderProfileForm();
     renderSettingsForm();
     updateCartSummary();
@@ -720,6 +744,44 @@ async function requestRefund(orderId) {
         createToast('Refund request sent to the restaurant.', 'success');
     } catch (error) {
         createToast(error.message, 'error');
+    }
+}
+
+function renderNotifications() {
+    const unreadCount = state.notifications.filter((item) => !item.read && !item.isDeleted).length;
+    const badgeText = unreadCount ? `${unreadCount} unread` : 'All caught up';
+    if (customerNotificationBadge) {
+        customerNotificationBadge.textContent = badgeText;
+    }
+    if (customerNotificationBadgeCount) {
+        customerNotificationBadgeCount.textContent = unreadCount || '0';
+        customerNotificationBadgeCount.classList.toggle('hidden', unreadCount === 0);
+    }
+    const list = document.getElementById('notificationsList');
+    if (!list) return;
+    list.innerHTML = state.notifications.length ? state.notifications.filter((item) => !item.isDeleted).map((item) => `
+      <div class="item-card notification-card ${item.read ? '' : 'unread'}">
+        <div class="panel-card-header">
+          <strong>${item.title || 'Update'}</strong>
+          <span class="badge">${item.type || 'system'}</span>
+        </div>
+        <div class="muted">${item.message || 'You have a new update from MANNA.'}</div>
+        <div class="muted">${formatDate(item.createdAt)}</div>
+        <div class="modal-actions">
+          <button class="ghost-btn" data-mark-notification="${item.id}">${item.read ? 'Read' : 'Mark as Read'}</button>
+        </div>
+      </div>`).join('') : '<div class="empty-state">No notifications yet.</div>';
+    list.querySelectorAll('[data-mark-notification]').forEach((button) => {
+        button.addEventListener('click', () => markNotificationAsRead(button.dataset.markNotification));
+    });
+}
+
+async function markNotificationAsRead(notificationId) {
+    try {
+        await firestore.collection('notifications').doc(notificationId).set({ read: true, updatedAt: new Date() }, { merge: true });
+        createToast('Notification marked as read.', 'success');
+    } catch (error) {
+        createToast(error.message || 'Unable to update the notification.', 'error');
     }
 }
 
@@ -1190,6 +1252,8 @@ function showSection(section) {
         renderOrders();
     } else if (section === 'favorites') {
         renderFavorites();
+    } else if (section === 'notifications') {
+        renderNotifications();
     } else if (section === 'restaurants') {
         renderRestaurants();
     } else if (section === 'home') {

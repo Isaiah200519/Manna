@@ -48,7 +48,11 @@
                 </label>
                 <label>
                     Password
-                    <input type="password" id="loginPassword" required placeholder="Your password" />
+                    <div class="password-input-wrap">
+                        <input type="password" id="loginPassword" required placeholder="Your password" />
+                        <button type="button" class="password-toggle" aria-label="Show password"
+                            title="Show password"></button>
+                    </div>
                 </label>
                 <button type="submit" id="loginButton">Sign In</button>
                 <button type="button" id="showRegisterButton" class="ghost-btn">Create a restaurant account</button>
@@ -74,11 +78,19 @@
                 </label>
                 <label>
                     Password
-                    <input type="password" id="registerPassword" required placeholder="Create a password" />
+                    <div class="password-input-wrap">
+                        <input type="password" id="registerPassword" required placeholder="Create a password" />
+                        <button type="button" class="password-toggle" aria-label="Show password"
+                            title="Show password"></button>
+                    </div>
                 </label>
                 <label>
                     Confirm Password
-                    <input type="password" id="registerConfirmPassword" required placeholder="Re-enter password" />
+                    <div class="password-input-wrap">
+                        <input type="password" id="registerConfirmPassword" required placeholder="Re-enter password" />
+                        <button type="button" class="password-toggle" aria-label="Show password"
+                            title="Show password"></button>
+                    </div>
                 </label>
                 <button type="submit" id="registerButton">Create Account</button>
                 <button type="button" id="showLoginButton" class="ghost-btn">Already have an account?</button>
@@ -91,8 +103,8 @@
     <div id="appShell" class="app-shell hidden">
         <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
         <aside class="sidebar" id="sidebar">
-            <div class="sidebar-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-                <div style="display:flex;align-items:center;gap:12px;">
+            <div class="sidebar-header sidebar-header--row">
+                <div class="brand-block__content">
                     <img src="./images/logo/logo.svg" alt="MANNA logo" class="brand-logo" />
                     <div>
                         <h2>MANNA</h2>
@@ -497,6 +509,7 @@
     </div>
 
     <script type="module" src="./restaurant-panel.js"></script>
+    <script src="./password-toggle.js"></script>
 </body>
 
 </html>

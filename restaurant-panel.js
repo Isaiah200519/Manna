@@ -1,4 +1,4 @@
-import { initFirebase } from './firebase-config.js';
+import { initFirebase, clearStoredAuthState } from './firebase-config.js';
 import { formatCurrency, formatDate, createToast, getImageUrl } from './utils.js';
 import { DEFAULT_CATEGORY_TAXONOMY, getCategoryDisplayName, getCategoryOptions } from './category-taxonomy.js';
 
@@ -88,6 +88,9 @@ function init() {
     firebase = initFirebase();
     auth = firebase.auth;
     firestore = firebase.db;
+    if (auth) {
+        auth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL).catch(() => { });
+    }
     if (!auth || !firestore) {
         createToast('Firebase is not ready yet. Please refresh the page.', 'error');
         return;
@@ -409,14 +412,16 @@ async function handleLogout() {
     clearAuthBootstrapTimer();
     try {
         await auth.signOut();
+    } catch (error) {
+        console.warn('[MANNA] Logout warning:', error);
+    } finally {
+        clearStoredAuthState();
         state.authUser = null;
         state.restaurantId = null;
         state.restaurantProfile = null;
         authScreen.classList.remove('hidden');
         appShell.classList.add('hidden');
         authMessage.textContent = '';
-    } catch (error) {
-        console.error(error);
     }
 }
 

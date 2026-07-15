@@ -44,14 +44,18 @@
 
                 <form id="loginForm" class="auth-form">
                     <label>Email<input id="loginEmail" type="email" required /></label>
-                    <label>Password<input id="loginPassword" type="password" required /></label>
+                    <label>Password<div class="password-input-wrap"><input id="loginPassword" type="password"
+                                required /><button type="button" class="password-toggle" aria-label="Show password"
+                                title="Show password"></button></div></label>
                     <button type="submit" class="primary-btn">Sign In</button>
                 </form>
 
                 <form id="registerForm" class="auth-form hidden">
                     <label>Full Name<input id="registerName" required /></label>
                     <label>Email<input id="registerEmail" type="email" required /></label>
-                    <label>Password<input id="registerPassword" type="password" required /></label>
+                    <label>Password<div class="password-input-wrap"><input id="registerPassword" type="password"
+                                required /><button type="button" class="password-toggle" aria-label="Show password"
+                                title="Show password"></button></div></label>
                     <label>Role<select id="registerRole">
                             <option value="customer">Customer</option>
                             <option value="restaurant">Restaurant</option>
@@ -85,6 +89,8 @@
 
     <script type="module" src="./app.js"></script>
     <script type="module" src="./seed-data.js"></script>
+    <script src="./password-toggle.js"></script>
+    <script src="./password-toggle.js"></script>
 </body>
 
 </html>

@@ -39,6 +39,28 @@ export function initFirebase() {
     return { app: firebaseApp, db: firestore, auth, analytics, ready: Boolean(firebaseApp && firestore) };
 }
 
+export function ensureAuthPersistence() {
+    const { auth } = initFirebase();
+    if (!auth || !window.firebase?.auth?.Auth?.Persistence) {
+        return Promise.resolve(false);
+    }
+
+    return auth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL).catch((error) => {
+        console.warn('[MANNA] Auth persistence setup failed:', error);
+        return false;
+    });
+}
+
+export function clearStoredAuthState() {
+    if (typeof window === 'undefined') return;
+    try {
+        localStorage.removeItem('manna-auth');
+        sessionStorage.removeItem('manna-auth');
+    } catch (error) {
+        console.warn('[MANNA] Failed to clear stored auth state:', error);
+    }
+}
+
 export function isFirebaseReady() {
     return Boolean(firebaseApp && firestore);
 }
