@@ -1425,6 +1425,7 @@ function renderCheckout() {
     const defaultAddress = state.addresses[0] ? `${state.addresses[0].street || ''}, ${state.addresses[0].city || ''}`.trim() : (state.customerProfile?.address || '');
     const defaultSelectedLocationId = state.cart.selectedLocationId || state.locations[0]?.id || '';
     const locationOptions = state.locations.length ? state.locations.map((location) => `<option value="${location.id}" ${defaultSelectedLocationId === location.id ? 'selected' : ''}>${escapeHtml(location.label || 'Location')}</option>`).join('') : '<option value="">No saved locations</option>';
+    const selectedPaymentMethod = state.cart.paymentMethod || 'orange_money';
     document.getElementById('checkoutContent').innerHTML = `
     <div class="stack">
       <div class="item-card">
@@ -1463,16 +1464,41 @@ function renderCheckout() {
         </div>
         <div class="item-card">
           <h4>Payment</h4>
-          <label>Payment method<select name="paymentMethod">
-            <option value="orange_money" ${state.cart.paymentMethod === 'orange_money' ? 'selected' : ''}>Orange Money</option>
-            <option value="lonestar_mobile_money" ${state.cart.paymentMethod === 'lonestar_mobile_money' ? 'selected' : ''}>Lonestar Mobile Money</option>
-          </select></label>
+          <div class="payment-method-selector">
+            <label class="payment-method-option ${selectedPaymentMethod === 'orange_money' ? 'selected' : ''}">
+              <input type="radio" name="paymentMethod" value="orange_money" ${selectedPaymentMethod === 'orange_money' ? 'checked' : ''} />
+              <img src="./images/payment-logos/orange.png" alt="Orange Money" />
+              <span>Orange Money</span>
+            </label>
+            <label class="payment-method-option ${selectedPaymentMethod === 'lonestar_mobile_money' ? 'selected' : ''}">
+              <input type="radio" name="paymentMethod" value="lonestar_mobile_money" ${selectedPaymentMethod === 'lonestar_mobile_money' ? 'checked' : ''} />
+              <img src="./images/payment-logos/lonestar.jpg" alt="Lonestar Mobile Money" />
+              <span>Lonestar</span>
+            </label>
+          </div>
           <div class="muted">Restaurant payment receiver: ${escapeHtml(paymentReceiverLabel)}</div>
-          <label>Your wallet / payment phone<input name="paymentPhone" value="${state.cart.paymentPhone || ''}" required /></label>
-          <label>Reference / payment details<input name="paymentDetails" value="${state.cart.paymentDetails || ''}" required /></label>
+          <div class="premium-payment-fields">
+            <label class="premium-field">
+              <span class="premium-field-title">Payment phone number</span>
+              <input class="premium-input" type="tel" name="paymentPhone" value="${state.cart.paymentPhone || ''}" placeholder="Enter your wallet number" required />
+            </label>
+            <label class="premium-field">
+              <span class="premium-field-title">Payment ID number</span>
+              <input class="premium-input" name="paymentDetails" value="${state.cart.paymentDetails || ''}" placeholder="Enter the payment reference or ID" required />
+            </label>
+          </div>
         </div>
       </form>
     </div>`;
+    document.querySelectorAll('.payment-method-option input[name="paymentMethod"]').forEach((radio) => {
+        radio.addEventListener('change', () => {
+            state.cart.paymentMethod = radio.value;
+            saveCartToStorage();
+            document.querySelectorAll('.payment-method-option').forEach((option) => {
+                option.classList.toggle('selected', option.querySelector('input')?.value === radio.value);
+            });
+        });
+    });
     document.getElementById('savedLocationSelect')?.addEventListener('change', (event) => {
         const selectedLocation = state.locations.find((location) => location.id === event.target.value);
         if (!selectedLocation) {

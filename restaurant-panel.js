@@ -41,7 +41,7 @@ const showLoginButton = document.getElementById('showLoginButton');
 const forgotPasswordButton = document.getElementById('forgotPasswordButton');
 const authMessage = document.getElementById('authMessage');
 const logoutButton = document.getElementById('logoutButton');
-const mobileNavToggle = document.getElementById('mobileNavToggle');
+const mobileNavToggle = document.getElementById('mobileNavToggle') || document.getElementById('mobileMenuButton');
 const mobileNavSheet = document.getElementById('mobileNavSheet');
 const mobileNavClose = document.getElementById('mobileNavClose');
 const mobileMenuButton = document.getElementById('mobileMenuButton');
@@ -101,13 +101,13 @@ function init() {
 }
 
 function bindEvents() {
-    loginForm.addEventListener('submit', handleLogin);
-    registerForm.addEventListener('submit', handleRegister);
-    showRegisterButton.addEventListener('click', () => toggleAuthMode(true));
-    showLoginButton.addEventListener('click', () => toggleAuthMode(false));
+    loginForm?.addEventListener('submit', handleLogin);
+    registerForm?.addEventListener('submit', handleRegister);
+    showRegisterButton?.addEventListener('click', () => toggleAuthMode(true));
+    showLoginButton?.addEventListener('click', () => toggleAuthMode(false));
     forgotPasswordButton?.addEventListener('click', handleForgotPassword);
-    logoutButton.addEventListener('click', handleLogout);
-    mobileNavToggle.addEventListener('click', () => setMobileNavOpen(true));
+    logoutButton?.addEventListener('click', handleLogout);
+    mobileNavToggle?.addEventListener('click', () => setMobileNavOpen(true));
     if (mobileNavClose) {
         mobileNavClose.addEventListener('click', () => setMobileNavOpen(false));
     }
@@ -152,40 +152,40 @@ function bindEvents() {
             renderMenu();
         });
     });
-    document.getElementById('catalogSearch').addEventListener('input', (event) => {
+    document.getElementById('catalogSearch')?.addEventListener('input', (event) => {
         state.catalogFilters.search = event.target.value.toLowerCase();
         renderCatalog();
     });
-    document.getElementById('catalogCategoryFilter').addEventListener('change', (event) => {
+    document.getElementById('catalogCategoryFilter')?.addEventListener('change', (event) => {
         state.catalogFilters.category = event.target.value;
         renderCatalog();
     });
-    document.getElementById('catalogStatusFilter').addEventListener('change', (event) => {
+    document.getElementById('catalogStatusFilter')?.addEventListener('change', (event) => {
         state.catalogFilters.status = event.target.value;
         renderCatalog();
     });
-    document.getElementById('menuSearch').addEventListener('input', (event) => {
+    document.getElementById('menuSearch')?.addEventListener('input', (event) => {
         state.menuFilters.search = event.target.value.toLowerCase();
         renderMenu();
     });
-    document.getElementById('menuCategoryFilter').addEventListener('change', (event) => {
+    document.getElementById('menuCategoryFilter')?.addEventListener('change', (event) => {
         state.menuFilters.category = event.target.value;
         renderMenu();
     });
-    document.getElementById('menuAvailabilityFilter').addEventListener('change', (event) => {
+    document.getElementById('menuAvailabilityFilter')?.addEventListener('change', (event) => {
         state.menuFilters.availability = event.target.value;
         renderMenu();
     });
-    document.getElementById('menuSort').addEventListener('change', (event) => {
+    document.getElementById('menuSort')?.addEventListener('change', (event) => {
         state.menuFilters.sort = event.target.value;
         renderMenu();
     });
-    document.getElementById('orderStatusFilter').addEventListener('change', (event) => {
+    document.getElementById('orderStatusFilter')?.addEventListener('change', (event) => {
         state.orderFilter = event.target.value;
         renderOrders();
     });
-    document.getElementById('saveProfileButton').addEventListener('click', saveProfile);
-    document.getElementById('saveSettingsButton').addEventListener('click', saveSettings);
+    document.getElementById('saveProfileButton')?.addEventListener('click', saveProfile);
+    document.getElementById('saveSettingsButton')?.addEventListener('click', saveSettings);
     supportButton?.addEventListener('click', toggleSupportModal);
     notificationsToggle?.addEventListener('click', () => {
         showSection('notifications');
@@ -193,14 +193,14 @@ function bindEvents() {
             setMobileNavOpen(false);
         }
     });
-    document.getElementById('createPromotionButton').addEventListener('click', openPromotionModal);
-    document.getElementById('createCouponButton').addEventListener('click', openCouponModal);
-    document.getElementById('bulkActivateButton').addEventListener('click', () => bulkUpdateMenu(true));
-    document.getElementById('bulkDeactivateButton').addEventListener('click', () => bulkUpdateMenu(false));
-    document.getElementById('bulkDeleteButton').addEventListener('click', bulkDeleteMenu);
-    document.getElementById('chatForm').addEventListener('submit', submitChat);
-    modalClose.addEventListener('click', closeModal);
-    modalBackdrop.addEventListener('click', (event) => {
+    document.getElementById('createPromotionButton')?.addEventListener('click', openPromotionModal);
+    document.getElementById('createCouponButton')?.addEventListener('click', openCouponModal);
+    document.getElementById('bulkActivateButton')?.addEventListener('click', () => bulkUpdateMenu(true));
+    document.getElementById('bulkDeactivateButton')?.addEventListener('click', () => bulkUpdateMenu(false));
+    document.getElementById('bulkDeleteButton')?.addEventListener('click', bulkDeleteMenu);
+    document.getElementById('chatForm')?.addEventListener('submit', submitChat);
+    modalClose?.addEventListener('click', closeModal);
+    modalBackdrop?.addEventListener('click', (event) => {
         if (event.target === modalBackdrop) closeModal();
     });
     window.addEventListener('keydown', handleModalEscape);
@@ -823,10 +823,6 @@ function updateApprovalGate() {
         button.disabled = !allowed;
         button.classList.toggle('disabled', !allowed);
     });
-
-    if (!isApproved && state.activeSection !== 'profile') {
-        showSection('profile');
-    }
 }
 
 function ensureApprovalBanner() {
@@ -840,11 +836,11 @@ function ensureApprovalBanner() {
 }
 
 function renderAll() {
+    renderDashboard();
+    renderProfileForm();
     if (!state.canSell) {
-        renderProfileForm();
         return;
     }
-    renderDashboard();
     renderCatalog();
     renderMenu();
     renderOrders();

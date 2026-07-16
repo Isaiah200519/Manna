@@ -178,6 +178,91 @@ label:has(input[type="radio"]) {
     background: rgba(255, 255, 255, 0.03);
 }
 
+.payment-method-selector {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin: 10px 0 14px;
+}
+
+.payment-method-option {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.025));
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer;
+}
+
+.payment-method-option input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.payment-method-option img {
+    width: 100%;
+    max-width: 150px;
+    height: 84px;
+    object-fit: contain;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    padding: 8px;
+}
+
+.payment-method-option span {
+    font-weight: 700;
+    color: var(--text);
+}
+
+.payment-method-option.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.16), 0 14px 30px rgba(249, 115, 22, 0.14);
+    transform: translateY(-2px);
+}
+
+.premium-payment-fields {
+    display: grid;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.premium-field {
+    display: grid;
+    gap: 8px;
+    padding: 12px 13px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.premium-field-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.premium-input {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(7, 17, 31, 0.76);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.premium-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.16);
+}
+
 input,
 select,
 textarea {
@@ -191,6 +276,12 @@ textarea {
 textarea {
     min-height: 88px;
     resize: vertical;
+}
+
+@media (max-width: 700px) {
+    .payment-method-selector {
+        grid-template-columns: 1fr;
+    }
 }
 
 .location-map {
