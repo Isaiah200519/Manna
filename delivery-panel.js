@@ -1,5 +1,6 @@
 import { initFirebase, clearStoredAuthState } from './firebase-config.js';
 import { formatCurrency, formatDate, createToast } from './utils.js';
+import { getQRCardHTML, initQRCode, bindQRDownloadHandlers } from './qr-utils.js';
 
 const state = {
     authUser: null,
@@ -693,7 +694,10 @@ function renderProfile() {
     <label>Vehicle Plate<input id="profileVehiclePlate" value="${profile.vehiclePlate || ''}" /></label>
     <label>Rating<input value="${profile.rating || 0}" readonly /></label>
     <label>Total Deliveries<input value="${profile.totalDeliveries || 0}" readonly /></label>
+    ${getQRCardHTML('deliveryQrContainer', 'deliveryQrCard')}
   `;
+    initQRCode('deliveryQrContainer');
+    bindQRDownloadHandlers();
 }
 
 function renderSettings() {
@@ -720,16 +724,23 @@ function renderNotifications() {
     const list = document.getElementById('notificationsList');
     if (!list) return;
     const visible = state.notifications.filter((item) => !item.isDeleted);
-    list.innerHTML = visible.length ? visible.map((item) => `
-    <div class="item-card notification-card ${item.read ? '' : 'unread'}">
-      <div class="panel-card-header"><strong>${item.title || 'Update'}</strong><span class="badge">${item.type || 'system'}</span></div>
-      <div class="muted">${item.message || ''}</div>
-      <div class="muted">${formatDate(item.createdAt)}</div>
-      <div class="action-row">
-        <button class="ghost-btn" data-action="mark-notification-read" data-id="${item.id}">${item.read ? 'Read' : 'Mark as Read'}</button>
-        <button class="danger-btn" data-action="delete-notification" data-id="${item.id}">Delete</button>
+    list.innerHTML = `
+      <div class="action-row" style="margin-bottom: 12px;">
+        <button class="ghost-btn" data-clear-all-notifications="true" ${visible.length ? '' : 'disabled'}>Clear all</button>
       </div>
-    </div>`).join('') : '<div class="empty-state">No notifications yet.</div>';
+      ${visible.length ? visible.map((item) => `
+      <div class="item-card notification-card ${item.read ? '' : 'unread'}">
+        <div class="panel-card-header"><strong>${item.title || 'Update'}</strong><span class="badge">${item.type || 'system'}</span></div>
+        <div class="muted">${item.message || ''}</div>
+        <div class="muted">${formatDate(item.createdAt)}</div>
+        <div class="action-row">
+          <button class="ghost-btn" data-action="mark-notification-read" data-id="${item.id}">${item.read ? 'Read' : 'Mark as Read'}</button>
+          <button class="danger-btn" data-action="delete-notification" data-id="${item.id}">Delete</button>
+        </div>
+      </div>`).join('') : '<div class="empty-state">No notifications yet.</div>'}`;
+    list.querySelectorAll('[data-clear-all-notifications]').forEach((button) => {
+        button.addEventListener('click', clearAllNotifications);
+    });
 }
 
 function renderHeaderNotifications() {
@@ -920,6 +931,8 @@ async function leaveRestaurant(restaurantId) {
 async function markNotificationRead(notificationId) {
     try {
         await firestore.collection('notifications').doc(notificationId).set({ read: true, updatedAt: new Date() }, { merge: true });
+        state.notifications = state.notifications.map((item) => (item.id === notificationId ? { ...item, read: true } : item));
+        renderNotifications();
     } catch (error) {
         createToast(error.message, 'error');
     }
@@ -927,7 +940,22 @@ async function markNotificationRead(notificationId) {
 
 async function deleteNotification(notificationId) {
     try {
-        await firestore.collection('notifications').doc(notificationId).set({ isDeleted: true, updatedAt: new Date() }, { merge: true });
+        await firestore.collection('notifications').doc(notificationId).set({ read: true, isDeleted: true, updatedAt: new Date() }, { merge: true });
+        state.notifications = state.notifications.map((item) => (item.id === notificationId ? { ...item, read: true, isDeleted: true } : item));
+        renderNotifications();
+    } catch (error) {
+        createToast(error.message, 'error');
+    }
+}
+
+async function clearAllNotifications() {
+    const visible = state.notifications.filter((item) => !item.isDeleted);
+    if (!visible.length) return;
+    try {
+        await Promise.all(visible.map((item) => firestore.collection('notifications').doc(item.id).set({ read: true, isDeleted: true, updatedAt: new Date() }, { merge: true })));
+        state.notifications = state.notifications.map((item) => (visible.some((entry) => entry.id === item.id) ? { ...item, read: true, isDeleted: true } : item));
+        renderNotifications();
+        createToast('All notifications cleared.', 'success');
     } catch (error) {
         createToast(error.message, 'error');
     }

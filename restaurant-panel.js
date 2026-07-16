@@ -1,6 +1,7 @@
 import { initFirebase, clearStoredAuthState } from './firebase-config.js';
 import { formatCurrency, formatDate, createToast, getImageUrl } from './utils.js';
 import { DEFAULT_CATEGORY_TAXONOMY, getCategoryDisplayName, getCategoryOptions } from './category-taxonomy.js';
+import { getQRCardHTML, initQRCode, bindQRDownloadHandlers } from './qr-utils.js';
 
 const state = {
     authUser: null,
@@ -1090,16 +1091,24 @@ function renderCoupons() {
 }
 
 function renderNotifications() {
-    document.getElementById('notificationBadge').textContent = `${state.notifications.filter((item) => !item.read).length} unread`;
-    document.getElementById('notificationsList').innerHTML = state.notifications.length ? state.notifications.map((item) => `
-    <div class="list-item">
-      <strong>${item.title || 'Notification'}</strong>
-      <div class="muted">${item.message || ''}</div>
-      <div class="modal-actions">
-        <button class="ghost-btn" data-read-notification="${item.id}">Mark read</button>
-        <button class="ghost-btn" data-delete-notification="${item.id}">Delete</button>
+    const visible = state.notifications.filter((item) => !item.isDeleted);
+    document.getElementById('notificationBadge').textContent = `${visible.filter((item) => !item.read).length} unread`;
+    document.getElementById('notificationsList').innerHTML = `
+      <div class="action-row" style="margin-bottom: 12px;">
+        <button class="ghost-btn" data-clear-all-notifications="true" ${visible.length ? '' : 'disabled'}>Clear all</button>
       </div>
-    </div>`).join('') : '<div class="empty-state">No notifications yet.</div>';
+      ${visible.length ? visible.map((item) => `
+      <div class="list-item">
+        <strong>${item.title || 'Notification'}</strong>
+        <div class="muted">${item.message || ''}</div>
+        <div class="modal-actions">
+          <button class="ghost-btn" data-read-notification="${item.id}">Mark read</button>
+          <button class="ghost-btn" data-delete-notification="${item.id}">Delete</button>
+        </div>
+      </div>`).join('') : '<div class="empty-state">No notifications yet.</div>'}`;
+    document.querySelectorAll('[data-clear-all-notifications]').forEach((button) => {
+        button.addEventListener('click', clearAllNotifications);
+    });
     document.querySelectorAll('[data-read-notification]').forEach((button) => {
         button.addEventListener('click', () => markNotificationRead(button.dataset.readNotification));
     });
@@ -1145,6 +1154,7 @@ function renderProfileForm() {
     <label class="full">Business Name<input name="businessName" value="${profile.businessName || ''}" /></label>
     <label>Owner Name<input name="ownerName" value="${profile.ownerName || ''}" /></label>
     <label>Phone<input name="phone" value="${profile.phone || ''}" /></label>
+    <label>Mobile money receiver<input name="mobileMoneyNumber" value="${profile.mobileMoneyNumber || ''}" /></label>
     <label>Email<input name="email" value="${profile.email || state.authUser?.email || ''}" /></label>
     <label>Address<input name="address" value="${profile.address || ''}" /></label>
     <label>City<input name="city" value="${profile.city || ''}" /></label>
@@ -1156,7 +1166,10 @@ function renderProfileForm() {
     <label>Closing Time<input name="close" value="${profile.openingHours?.close || ''}" /></label>
     <label>Delivery Radius<input name="deliveryRadius" type="number" value="${profile.deliveryRadius || 5}" /></label>
     <label>Prep Time<input name="estimatedPrepTime" type="number" value="${profile.estimatedPrepTime || 20}" /></label>
+    ${getQRCardHTML('restaurantQrContainer', 'restaurantQrCard')}
   `;
+    initQRCode('restaurantQrContainer');
+    bindQRDownloadHandlers();
     form.insertAdjacentHTML('afterend', `
       <div class="panel-card">
         <div class="panel-card-header">
@@ -1320,6 +1333,8 @@ async function saveProfile(event) {
         businessName: data.businessName,
         ownerName: data.ownerName,
         phone: data.phone,
+        mobileMoneyNumber: data.mobileMoneyNumber || '',
+        acceptedPaymentMethods: state.restaurantProfile?.acceptedPaymentMethods || ['mobile_money', 'cash'],
         email: data.email,
         address: data.address,
         city: data.city,
@@ -1712,15 +1727,24 @@ async function reportReview(reviewId) {
 }
 
 async function markNotificationRead(notificationId) {
-    await firestore.collection('restaurants').doc(state.restaurantId).collection('notifications').doc(notificationId).update({ read: true, updatedAt: new Date() });
+    await firestore.collection('restaurants').doc(state.restaurantId).collection('notifications').doc(notificationId).set({ read: true, updatedAt: new Date() }, { merge: true });
     await loadNotifications();
     renderNotifications();
 }
 
 async function deleteNotification(notificationId) {
-    await firestore.collection('restaurants').doc(state.restaurantId).collection('notifications').doc(notificationId).delete();
+    await firestore.collection('restaurants').doc(state.restaurantId).collection('notifications').doc(notificationId).set({ read: true, isDeleted: true, updatedAt: new Date() }, { merge: true });
     await loadNotifications();
     renderNotifications();
+}
+
+async function clearAllNotifications() {
+    const visible = state.notifications.filter((item) => !item.isDeleted);
+    if (!visible.length) return;
+    await Promise.all(visible.map((item) => firestore.collection('restaurants').doc(state.restaurantId).collection('notifications').doc(item.id).set({ read: true, isDeleted: true, updatedAt: new Date() }, { merge: true })));
+    await loadNotifications();
+    renderNotifications();
+    createToast('All notifications cleared.', 'success');
 }
 
 async function submitChat(event) {

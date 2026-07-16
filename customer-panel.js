@@ -1,6 +1,8 @@
 import { initFirebase, clearStoredAuthState } from './firebase-config.js';
 import { formatCurrency, formatDate, createToast, getImageUrl, getRestaurantImageUrl } from './utils.js';
 import { DEFAULT_CATEGORY_TAXONOMY, getCategoryDisplayName, getCategoryOptions } from './category-taxonomy.js';
+import { getQRCardHTML, initQRCode, bindQRDownloadHandlers } from './qr-utils.js';
+import { resolveRestaurantPaymentDetails } from './checkout-utils.mjs';
 
 const addonOptions = [
     { id: 'water', name: 'Water Bottle', price: 40 },
@@ -25,7 +27,7 @@ const state = {
     favoritesUnsubscribe: null,
     addressesUnsubscribe: null,
     locationsUnsubscribe: null,
-    cart: { restaurantId: '', restaurantName: '', items: [], addons: [], drink: null, paymentMethod: 'orange_money', paymentPhone: '', paymentDetails: '', contactPhone: '', notes: '', deliveryFee: 0, selectedLocationId: '' },
+    cart: { restaurantId: '', restaurantName: '', items: [], addons: [], drink: null, paymentMethod: 'orange_money', paymentPhone: '', paymentDetails: '', contactPhone: '', notes: '', deliveryFee: 0, selectedLocationId: '', restaurantPaymentReceiver: '', restaurantAcceptedPaymentMethods: [] },
     checkoutLocationSelection: null,
     activeSection: 'home',
     selectedRestaurant: null,
@@ -112,7 +114,9 @@ function normalizeCartState(cart = {}) {
         contactPhone: cart.contactPhone || '',
         notes: cart.notes || '',
         deliveryFee: Number(cart.deliveryFee || state.deliveryFee || 60),
-        selectedLocationId: cart.selectedLocationId || ''
+        selectedLocationId: cart.selectedLocationId || '',
+        restaurantPaymentReceiver: cart.restaurantPaymentReceiver || '',
+        restaurantAcceptedPaymentMethods: Array.isArray(cart.restaurantAcceptedPaymentMethods) ? cart.restaurantAcceptedPaymentMethods : []
     };
 }
 
@@ -155,12 +159,12 @@ function init() {
 }
 
 function bindEvents() {
-    loginForm.addEventListener('submit', handleLogin);
-    registerForm.addEventListener('submit', handleRegister);
-    showRegisterButton.addEventListener('click', () => toggleAuthMode(true));
-    showLoginButton.addEventListener('click', () => toggleAuthMode(false));
+    loginForm?.addEventListener('submit', handleLogin);
+    registerForm?.addEventListener('submit', handleRegister);
+    showRegisterButton?.addEventListener('click', () => toggleAuthMode(true));
+    showLoginButton?.addEventListener('click', () => toggleAuthMode(false));
     forgotPasswordButton?.addEventListener('click', handleForgotPassword);
-    logoutButton.addEventListener('click', handleLogout);
+    logoutButton?.addEventListener('click', handleLogout);
     const openMobileMenu = (event) => {
         if (event) {
             event.preventDefault();
@@ -169,7 +173,7 @@ function bindEvents() {
         setMobileNavOpen(true);
     };
 
-    mobileNavToggle.addEventListener('click', openMobileMenu);
+    mobileNavToggle?.addEventListener('click', openMobileMenu);
     if (mobileNavClose) {
         mobileNavClose.addEventListener('click', (event) => {
             event.stopPropagation();
@@ -193,7 +197,7 @@ function bindEvents() {
         });
     }
     document.getElementById('mobileLogoutButton')?.addEventListener('click', handleLogout);
-    cartButton.addEventListener('click', () => showSection('cart'));
+    cartButton?.addEventListener('click', () => showSection('cart'));
     if (notificationsToggle) {
         notificationsToggle.addEventListener('click', () => {
             showSection('notifications');
@@ -204,29 +208,29 @@ function bindEvents() {
         if (!button.dataset.section) return;
         button.addEventListener('click', () => showSection(button.dataset.section));
     });
-    document.getElementById('homeSearch').addEventListener('input', (event) => {
+    document.getElementById('homeSearch')?.addEventListener('input', (event) => {
         state.searchQuery = event.target.value.toLowerCase();
         renderHome();
     });
-    document.getElementById('restaurantSearch').addEventListener('input', (event) => {
+    document.getElementById('restaurantSearch')?.addEventListener('input', (event) => {
         state.searchQuery = event.target.value.toLowerCase();
         renderRestaurants();
     });
-    document.getElementById('restaurantCategoryFilter').addEventListener('change', (event) => {
+    document.getElementById('restaurantCategoryFilter')?.addEventListener('change', (event) => {
         state.filters.category = event.target.value;
         renderRestaurants();
     });
-    document.getElementById('restaurantSort').addEventListener('change', (event) => {
+    document.getElementById('restaurantSort')?.addEventListener('change', (event) => {
         state.filters.sort = event.target.value;
         renderRestaurants();
     });
-    document.getElementById('orderFilter').addEventListener('change', (event) => {
+    document.getElementById('orderFilter')?.addEventListener('change', (event) => {
         state.orderFilter = event.target.value;
         renderOrders();
     });
-    document.getElementById('saveProfileButton').addEventListener('click', saveProfile);
-    document.getElementById('placeOrderButton').addEventListener('click', placeOrder);
-    document.getElementById('checkoutButton').addEventListener('click', () => showSection('checkout'));
+    document.getElementById('saveProfileButton')?.addEventListener('click', saveProfile);
+    document.getElementById('placeOrderButton')?.addEventListener('click', placeOrder);
+    document.getElementById('checkoutButton')?.addEventListener('click', () => showSection('checkout'));
     document.addEventListener('click', (event) => {
         if (event.target.closest('#mobileMenuButton')) {
             event.preventDefault();
@@ -239,8 +243,8 @@ function bindEvents() {
             showSection(sectionButton.dataset.section);
         }
     });
-    modalClose.addEventListener('click', closeModal);
-    modalBackdrop.addEventListener('click', (event) => {
+    modalClose?.addEventListener('click', closeModal);
+    modalBackdrop?.addEventListener('click', (event) => {
         if (event.target === modalBackdrop) closeModal();
     });
     window.addEventListener('keydown', handleModalEscape);
@@ -748,7 +752,8 @@ async function requestRefund(orderId) {
 }
 
 function renderNotifications() {
-    const unreadCount = state.notifications.filter((item) => !item.read && !item.isDeleted).length;
+    const visible = state.notifications.filter((item) => !item.isDeleted);
+    const unreadCount = visible.filter((item) => !item.read).length;
     const badgeText = unreadCount ? `${unreadCount} unread` : 'All caught up';
     if (customerNotificationBadge) {
         customerNotificationBadge.textContent = badgeText;
@@ -759,29 +764,66 @@ function renderNotifications() {
     }
     const list = document.getElementById('notificationsList');
     if (!list) return;
-    list.innerHTML = state.notifications.length ? state.notifications.filter((item) => !item.isDeleted).map((item) => `
-      <div class="item-card notification-card ${item.read ? '' : 'unread'}">
-        <div class="panel-card-header">
-          <strong>${item.title || 'Update'}</strong>
-          <span class="badge">${item.type || 'system'}</span>
-        </div>
-        <div class="muted">${item.message || 'You have a new update from MANNA.'}</div>
-        <div class="muted">${formatDate(item.createdAt)}</div>
-        <div class="modal-actions">
-          <button class="ghost-btn" data-mark-notification="${item.id}">${item.read ? 'Read' : 'Mark as Read'}</button>
-        </div>
-      </div>`).join('') : '<div class="empty-state">No notifications yet.</div>';
+    list.innerHTML = `
+      <div class="action-row" style="margin-bottom: 12px;">
+        <button class="ghost-btn" data-clear-all-notifications="true" ${visible.length ? '' : 'disabled'}>Clear all</button>
+      </div>
+      ${visible.length ? visible.map((item) => `
+        <div class="item-card notification-card ${item.read ? '' : 'unread'}">
+          <div class="panel-card-header">
+            <strong>${item.title || 'Update'}</strong>
+            <span class="badge">${item.type || 'system'}</span>
+          </div>
+          <div class="muted">${item.message || 'You have a new update from MANNA.'}</div>
+          <div class="muted">${formatDate(item.createdAt)}</div>
+          <div class="modal-actions">
+            <button class="ghost-btn" data-mark-notification="${item.id}">${item.read ? 'Read' : 'Mark as Read'}</button>
+            <button class="danger-btn" data-delete-notification="${item.id}">Delete</button>
+          </div>
+        </div>`).join('') : '<div class="empty-state">No notifications yet.</div>'}`;
+    list.querySelectorAll('[data-clear-all-notifications]').forEach((button) => {
+        button.addEventListener('click', clearAllNotifications);
+    });
     list.querySelectorAll('[data-mark-notification]').forEach((button) => {
         button.addEventListener('click', () => markNotificationAsRead(button.dataset.markNotification));
+    });
+    list.querySelectorAll('[data-delete-notification]').forEach((button) => {
+        button.addEventListener('click', () => deleteNotification(button.dataset.deleteNotification));
     });
 }
 
 async function markNotificationAsRead(notificationId) {
     try {
         await firestore.collection('notifications').doc(notificationId).set({ read: true, updatedAt: new Date() }, { merge: true });
+        state.notifications = state.notifications.map((item) => (item.id === notificationId ? { ...item, read: true } : item));
+        renderNotifications();
         createToast('Notification marked as read.', 'success');
     } catch (error) {
         createToast(error.message || 'Unable to update the notification.', 'error');
+    }
+}
+
+async function deleteNotification(notificationId) {
+    try {
+        await firestore.collection('notifications').doc(notificationId).set({ read: true, isDeleted: true, updatedAt: new Date() }, { merge: true });
+        state.notifications = state.notifications.map((item) => (item.id === notificationId ? { ...item, read: true, isDeleted: true } : item));
+        renderNotifications();
+        createToast('Notification deleted.', 'success');
+    } catch (error) {
+        createToast(error.message || 'Unable to delete the notification.', 'error');
+    }
+}
+
+async function clearAllNotifications() {
+    const visible = state.notifications.filter((item) => !item.isDeleted);
+    if (!visible.length) return;
+    try {
+        await Promise.all(visible.map((item) => firestore.collection('notifications').doc(item.id).set({ read: true, isDeleted: true, updatedAt: new Date() }, { merge: true })));
+        state.notifications = state.notifications.map((item) => (visible.some((entry) => entry.id === item.id) ? { ...item, read: true, isDeleted: true } : item));
+        renderNotifications();
+        createToast('All notifications cleared.', 'success');
+    } catch (error) {
+        createToast(error.message || 'Unable to clear the notifications.', 'error');
     }
 }
 
@@ -836,7 +878,10 @@ function renderProfileForm() {
     <label>Phone<input name="phone" value="${profile.phone || ''}" /></label>
     <label>Email<input name="email" value="${profile.email || ''}" /></label>
     <label>Address<input name="address" value="${profile.address || ''}" /></label>
+    ${getQRCardHTML('customerQrContainer', 'customerQrCard')}
   `;
+    initQRCode('customerQrContainer');
+    bindQRDownloadHandlers();
     renderLocationPicker();
     document.getElementById('addressList').innerHTML = state.addresses.length ? state.addresses.map((address) => `<div class="item-card"><strong>${address.label || 'Address'}</strong><div class="muted">${address.street || ''} • ${address.city || ''}</div></div>`).join('') : '<div class="empty-state">No saved addresses yet.</div>';
 }
@@ -1323,8 +1368,12 @@ async function addToCart(menuItemId) {
         if (!replace) return;
     }
     if (button) setButtonBusy(button, 'Adding…');
+    const restaurant = state.restaurants.find((entry) => entry.id === restaurantId);
+    const paymentDetails = resolveRestaurantPaymentDetails(restaurant, state.cart);
     state.cart.restaurantId = restaurantId;
-    state.cart.restaurantName = state.restaurants.find((restaurant) => restaurant.id === restaurantId)?.name || state.cart.restaurantName || 'Restaurant';
+    state.cart.restaurantName = restaurant?.name || state.cart.restaurantName || 'Restaurant';
+    state.cart.restaurantPaymentReceiver = paymentDetails.restaurantPaymentReceiver;
+    state.cart.restaurantAcceptedPaymentMethods = paymentDetails.acceptedPaymentMethods;
     const existingIndex = state.cart.items.findIndex((item) => item.menuItemId === menuItemId);
     if (existingIndex >= 0) state.cart.items[existingIndex].quantity += 1;
     else state.cart.items.push({ menuItemId, quantity: 1, variations: [], addons: [], notes: '' });
@@ -1338,19 +1387,27 @@ async function addToCart(menuItemId) {
 function renderCart() {
     const items = getCartItems();
     document.getElementById('cartContent').innerHTML = items.length ? items.map((entry) => `
-    <div class="item-card">
+    <div class="item-card cart-item-card">
       <img src="${getImageUrl(entry.menuItem?.imageFilename || entry.menuItem?.image || '')}" alt="${entry.menuItem?.name || 'Item'}" onerror="this.src='./images/placeholder.png'" />
       <div class="panel-card-header"><strong>${entry.menuItem?.name || 'Item'}</strong><span>${formatCurrency((entry.menuItem?.price || 0) * entry.quantity)}</span></div>
-      <div class="muted">Qty ${entry.quantity}</div>
       <div class="muted">${entry.menuItem?.restaurantDescription || 'Freshly prepared for delivery.'}</div>
-      <div class="modal-actions">
-        <button class="ghost-btn" data-cart-decrease="${entry.menuItemId}">-</button>
-        <button class="ghost-btn" data-cart-increase="${entry.menuItemId}">+</button>
-        <button class="ghost-btn" data-cart-remove="${entry.menuItemId}">Remove</button>
+      <div class="cart-actions-row">
+        <div class="cart-quantity-control">
+          <button class="cart-qty-btn" data-cart-decrease="${entry.menuItemId}" type="button" aria-label="Decrease quantity">−</button>
+          <input class="cart-qty-input" type="number" min="1" value="${entry.quantity}" data-cart-quantity-input="${entry.menuItemId}" aria-label="Quantity" />
+          <button class="cart-qty-btn" data-cart-increase="${entry.menuItemId}" type="button" aria-label="Increase quantity">+</button>
+        </div>
+        <button class="ghost-btn cart-remove-btn" data-cart-remove="${entry.menuItemId}" type="button">Remove</button>
       </div>
     </div>`).join('') : '<div class="empty-state">Your cart is empty.</div>';
     document.querySelectorAll('[data-cart-decrease]').forEach((button) => button.addEventListener('click', () => adjustCartQuantity(button.dataset.cartDecrease, -1)));
     document.querySelectorAll('[data-cart-increase]').forEach((button) => button.addEventListener('click', () => adjustCartQuantity(button.dataset.cartIncrease, 1)));
+    document.querySelectorAll('[data-cart-quantity-input]').forEach((input) => input.addEventListener('change', (event) => {
+        const menuItemId = event.target.dataset.cartQuantityInput;
+        const nextQuantity = Number.parseInt(event.target.value, 10);
+        if (!menuItemId) return;
+        setCartQuantity(menuItemId, Number.isNaN(nextQuantity) ? 1 : nextQuantity);
+    }));
     document.querySelectorAll('[data-cart-remove]').forEach((button) => button.addEventListener('click', () => removeCartItem(button.dataset.cartRemove)));
 }
 
@@ -1361,6 +1418,10 @@ function renderCheckout() {
     const addonTotal = state.cart.addons.reduce((sum, addonId) => sum + (addonOptions.find((option) => option.id === addonId)?.price || 0), 0);
     const deliveryFee = Number(state.cart.deliveryFee || state.deliveryFee || 60);
     const total = subtotal + addonTotal + deliveryFee;
+    const restaurant = state.restaurants.find((entry) => entry.id === state.cart.restaurantId);
+    const paymentDetails = resolveRestaurantPaymentDetails(restaurant, state.cart);
+    const paymentReceiverLabel = paymentDetails.restaurantPaymentReceiver || 'No payment receiver has been added yet for this restaurant.';
+    const acceptedMethodsLabel = paymentDetails.acceptedPaymentMethods.length ? paymentDetails.acceptedPaymentMethods.map((method) => method.replace(/_/g, ' ')).join(', ') : 'Mobile money or cash';
     const defaultAddress = state.addresses[0] ? `${state.addresses[0].street || ''}, ${state.addresses[0].city || ''}`.trim() : (state.customerProfile?.address || '');
     const defaultSelectedLocationId = state.cart.selectedLocationId || state.locations[0]?.id || '';
     const locationOptions = state.locations.length ? state.locations.map((location) => `<option value="${location.id}" ${defaultSelectedLocationId === location.id ? 'selected' : ''}>${escapeHtml(location.label || 'Location')}</option>`).join('') : '<option value="">No saved locations</option>';
@@ -1374,6 +1435,8 @@ function renderCheckout() {
         <p><strong>Delivery fee:</strong> ${formatCurrency(deliveryFee)}</p>
         <p><strong>Add-ons:</strong> ${addonTotal ? formatCurrency(addonTotal) : 'None'}</p>
         <p><strong>Total:</strong> ${formatCurrency(total)}</p>
+        <div class="muted">Payment receiver: ${escapeHtml(paymentReceiverLabel)}</div>
+        <div class="muted">Accepted methods: ${escapeHtml(acceptedMethodsLabel)}</div>
       </div>
       <form id="checkoutForm" class="stack">
         <div class="item-card">
@@ -1404,7 +1467,8 @@ function renderCheckout() {
             <option value="orange_money" ${state.cart.paymentMethod === 'orange_money' ? 'selected' : ''}>Orange Money</option>
             <option value="lonestar_mobile_money" ${state.cart.paymentMethod === 'lonestar_mobile_money' ? 'selected' : ''}>Lonestar Mobile Money</option>
           </select></label>
-          <label>Wallet / payment phone<input name="paymentPhone" value="${state.cart.paymentPhone || ''}" required /></label>
+          <div class="muted">Restaurant payment receiver: ${escapeHtml(paymentReceiverLabel)}</div>
+          <label>Your wallet / payment phone<input name="paymentPhone" value="${state.cart.paymentPhone || ''}" required /></label>
           <label>Reference / payment details<input name="paymentDetails" value="${state.cart.paymentDetails || ''}" required /></label>
         </div>
       </form>
@@ -1431,14 +1495,24 @@ function renderCheckout() {
     }
 }
 
-function adjustCartQuantity(menuItemId, delta) {
+function setCartQuantity(menuItemId, quantity) {
     const item = state.cart.items.find((entry) => entry.menuItemId === menuItemId);
     if (!item) return;
-    item.quantity = Math.max(0, item.quantity + delta);
-    if (item.quantity === 0) state.cart.items = state.cart.items.filter((entry) => entry.menuItemId !== menuItemId);
+    const nextQuantity = Math.max(0, Number(quantity) || 0);
+    if (nextQuantity <= 0) {
+        state.cart.items = state.cart.items.filter((entry) => entry.menuItemId !== menuItemId);
+    } else {
+        item.quantity = nextQuantity;
+    }
     saveCartToStorage();
     updateCartSummary();
     renderCart();
+}
+
+function adjustCartQuantity(menuItemId, delta) {
+    const item = state.cart.items.find((entry) => entry.menuItemId === menuItemId);
+    if (!item) return;
+    setCartQuantity(menuItemId, (item.quantity || 0) + delta);
 }
 
 function setCheckoutLocationBusy(button, label) {
@@ -1603,6 +1677,7 @@ async function placeOrder() {
     const deliveryFee = Number(state.cart.deliveryFee || state.deliveryFee || 60);
     const total = subtotal + addonTotal + deliveryFee;
     const restaurant = state.restaurants.find((entry) => entry.id === state.cart.restaurantId);
+    const restaurantPaymentDetails = resolveRestaurantPaymentDetails(restaurant, state.cart);
     const etaMinutes = Number(restaurant?.estimatedPrepTime || state.customerProfile?.estimatedPrepTime || 35) + 25;
     const deliveryLocationPayload = buildDeliveryLocationPayload(selectedLocation);
     const orderPayload = {
@@ -1611,7 +1686,9 @@ async function placeOrder() {
         customerPhone,
         restaurantId: state.cart.restaurantId,
         restaurantName: state.cart.restaurantName || restaurant?.name || 'Restaurant',
-        restaurantMobileMoney: restaurant?.mobileMoneyNumber || '',
+        restaurantMobileMoney: restaurantPaymentDetails.restaurantMobileMoney,
+        restaurantPaymentReceiver: restaurantPaymentDetails.restaurantPaymentReceiver,
+        restaurantAcceptedPaymentMethods: restaurantPaymentDetails.acceptedPaymentMethods,
         address: deliveryAddress,
         deliveryLocationId: selectedLocation?.id || '',
         deliveryLocationLabel: selectedLocation?.label || '',
@@ -1698,7 +1775,7 @@ async function placeOrder() {
             await firestore.collection('users').doc(state.authUser.uid).collection('customerLocations').add(locationPayload);
         }
         await syncActiveOrderLocation(deliveryAddress, orderPayload.deliveryLocation);
-        state.cart = normalizeCartState({ restaurantId: '', restaurantName: '', items: [], addons: [], drink: null, paymentMethod: 'orange_money', paymentPhone: '', paymentDetails: '', contactPhone: '', notes: '', deliveryFee: state.deliveryFee, selectedLocationId: '' });
+        state.cart = normalizeCartState({ restaurantId: '', restaurantName: '', items: [], addons: [], drink: null, paymentMethod: 'orange_money', paymentPhone: '', paymentDetails: '', contactPhone: '', notes: '', deliveryFee: state.deliveryFee, selectedLocationId: '', restaurantPaymentReceiver: '', restaurantAcceptedPaymentMethods: [] });
         saveCartToStorage();
         updateCartSummary();
         showSection('orders');
@@ -1721,7 +1798,7 @@ function trackOrder(orderId) {
 function repeatOrder(orderId) {
     const order = state.orders.find((entry) => entry.id === orderId);
     if (!order) return;
-    state.cart = normalizeCartState({ restaurantId: order.restaurantId, restaurantName: order.restaurantName, items: order.items.map((item) => ({ ...item, quantity: item.quantity || 1 })), addons: [], drink: null, paymentMethod: 'orange_money', paymentPhone: '', paymentDetails: '', contactPhone: '', notes: '', deliveryFee: state.deliveryFee, selectedLocationId: order.deliveryLocationId || '' });
+    state.cart = normalizeCartState({ restaurantId: order.restaurantId, restaurantName: order.restaurantName, items: order.items.map((item) => ({ ...item, quantity: item.quantity || 1 })), addons: [], drink: null, paymentMethod: 'orange_money', paymentPhone: '', paymentDetails: '', contactPhone: '', notes: '', deliveryFee: state.deliveryFee, selectedLocationId: order.deliveryLocationId || '', restaurantPaymentReceiver: order.restaurantPaymentReceiver || order.restaurantMobileMoney || '', restaurantAcceptedPaymentMethods: Array.isArray(order.restaurantAcceptedPaymentMethods) ? order.restaurantAcceptedPaymentMethods : [] });
     saveCartToStorage();
     updateCartSummary();
     createToast('Items added back to cart.', 'success');

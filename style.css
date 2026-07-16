@@ -39,6 +39,10 @@
 
 /* keep the mobile header toggle visible so the sidebar can be opened on compact screens */
 @media (max-width: 767px) {
+    body {
+        width: 95%;
+        margin: 0 auto;
+    }
 
     #menuToggle,
     .icon-btn#menuToggle {
@@ -53,13 +57,18 @@
     font-family: var(--font-stack);
 }
 
+html,
+body {
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
 html {
     scroll-behavior: smooth;
 }
 
 body {
     min-height: var(--app-height);
-    overflow-x: hidden;
     background: radial-gradient(circle at top left, rgba(249, 115, 22, 0.16), transparent 32%), var(--bg-main);
     color: var(--text-main);
     -webkit-font-smoothing: antialiased;
@@ -490,6 +499,67 @@ textarea:focus-visible {
     gap: var(--space-md);
 }
 
+.auth-option-grid {
+    display: grid;
+    gap: var(--space-sm);
+}
+
+.auth-method-card {
+    display: grid;
+    gap: var(--space-sm);
+    padding: var(--space-md);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-main);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.auth-modal {
+    margin-top: var(--space-sm);
+}
+
+.auth-divider {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    color: var(--text-muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border-color);
+}
+
+.auth-inline-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+}
+
+.provider-btn {
+    width: 100%;
+    justify-content: center;
+}
+
+.auth-help-text {
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.recaptcha-host {
+    position: absolute;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}
+
 .auth-form label,
 .input-group label {
     display: grid;
@@ -558,6 +628,68 @@ textarea {
 input::placeholder,
 textarea::placeholder {
     color: var(--text-muted);
+}
+
+.cart-actions-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    margin-top: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+.cart-quantity-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px;
+    border-radius: var(--radius-pill);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border-color);
+}
+
+.cart-qty-btn {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 50%;
+    background: var(--bg-surface);
+    color: var(--text-main);
+    font-size: 18px;
+    cursor: pointer;
+    transition: transform 180ms ease, background 180ms ease;
+}
+
+.cart-qty-btn:hover {
+    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.14);
+}
+
+.cart-qty-input {
+    width: 54px;
+    min-width: 54px;
+    text-align: center;
+    border: none;
+    background: transparent;
+    color: var(--text-main);
+    font-weight: 700;
+    padding: 0;
+    appearance: textfield;
+}
+
+.cart-qty-input::-webkit-outer-spin-button,
+.cart-qty-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.cart-remove-btn {
+    padding-inline: 12px;
+    border-radius: var(--radius-pill);
 }
 
 input:focus,
@@ -1676,6 +1808,104 @@ tr:last-child td {
 .panel-card-header h3 {
     font-size: 18px;
     font-weight: 700;
+}
+
+.qr-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: var(--space-lg);
+    padding: var(--space-lg);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-main);
+    background: linear-gradient(135deg, rgba(249, 115, 22, 0.12), rgba(30, 30, 30, 0.95));
+    box-shadow: var(--shadow-card);
+    text-align: center;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.qr-card__header {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-sm);
+    text-align: center;
+}
+
+.qr-card__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: rgba(249, 115, 22, 0.16);
+    color: var(--accent);
+    flex-shrink: 0;
+}
+
+.qr-card__icon svg {
+    width: 20px;
+    height: 20px;
+}
+
+.qr-card__eyebrow {
+    margin-bottom: var(--space-xs);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--accent);
+}
+
+.qr-card__title {
+    margin-bottom: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.qr-card__text {
+    margin: 0 auto var(--space-md);
+    max-width: 360px;
+    color: var(--text-muted);
+    line-height: 1.6;
+}
+
+.qr-card__canvas {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto var(--space-md);
+}
+
+.qr-card__canvas canvas,
+.qr-card__canvas img {
+    display: block;
+    width: min(100%, 256px);
+    max-width: 256px;
+    height: auto;
+    max-height: 256px;
+    object-fit: contain;
+    margin: 0 auto;
+}
+
+.qr-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-sm);
+    width: 100%;
+}
+
+.qr-card__download-btn,
+.qr-card__copy-btn,
+.qr-card__open-btn {
+    margin-top: var(--space-sm);
 }
 
 .toolbar {

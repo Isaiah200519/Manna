@@ -2,6 +2,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const wrappers = document.querySelectorAll('.password-input-wrap');
 
     wrappers.forEach((wrapper) => {
+        if (wrapper.dataset.passwordToggleBound === 'true') return;
+        wrapper.dataset.passwordToggleBound = 'true';
+
         const input = wrapper.querySelector('input[type="password"], input[type="text"]');
         const toggleButton = wrapper.querySelector('.password-toggle');
 

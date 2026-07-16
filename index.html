@@ -48,6 +48,31 @@
                                 required /><button type="button" class="password-toggle" aria-label="Show password"
                                 title="Show password"></button></div></label>
                     <button type="submit" class="primary-btn">Sign In</button>
+
+                    <div class="auth-divider"><span>Or continue with</span></div>
+                    <div class="auth-option-grid">
+                        <button type="button" id="loginGoogleButton" class="secondary-btn provider-btn">Continue with
+                            Google</button>
+                        <button type="button" id="showLoginPhoneModal" class="ghost-btn provider-btn">Continue with
+                            phone</button>
+                    </div>
+
+                    <div id="loginPhoneModal" class="auth-modal hidden">
+                        <div class="auth-method-card">
+                            <label>Phone number<input id="loginPhoneNumber" type="tel"
+                                    placeholder="+231 77 123 4567" /></label>
+                            <div class="auth-inline-actions">
+                                <button type="button" id="loginPhoneSendButton" class="secondary-btn">Send SMS
+                                    code</button>
+                                <button type="button" id="loginPhoneVerifyButton" class="primary-btn">Verify
+                                    code</button>
+                            </div>
+                            <div id="loginPhoneOtpGroup" class="hidden">
+                                <label>SMS code<input id="loginPhoneOtp" inputmode="numeric"
+                                        autocomplete="one-time-code" /></label>
+                            </div>
+                        </div>
+                    </div>
                 </form>
 
                 <form id="registerForm" class="auth-form hidden">
@@ -63,12 +88,67 @@
                             <option value="admin">Admin</option>
                         </select></label>
                     <button type="submit" class="primary-btn">Create Account</button>
+
+                    <div class="auth-divider"><span>Or register with</span></div>
+                    <div class="auth-option-grid">
+                        <button type="button" id="registerGoogleButton" class="secondary-btn provider-btn">Sign up with
+                            Google</button>
+                        <button type="button" id="showRegisterPhoneModal" class="ghost-btn provider-btn">Register with
+                            phone</button>
+                    </div>
+
+                    <div id="registerPhoneModal" class="auth-modal hidden">
+                        <div class="auth-method-card">
+                            <label>Phone number<input id="registerPhoneNumber" type="tel"
+                                    placeholder="+231 77 123 4567" /></label>
+                            <div class="auth-inline-actions">
+                                <button type="button" id="registerPhoneSendButton" class="secondary-btn">Send SMS
+                                    code</button>
+                                <button type="button" id="registerPhoneVerifyButton" class="primary-btn">Verify
+                                    code</button>
+                            </div>
+                            <div id="registerPhoneOtpGroup" class="hidden">
+                                <label>SMS code<input id="registerPhoneOtp" inputmode="numeric"
+                                        autocomplete="one-time-code" /></label>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+
+                <form id="passwordResetForm" class="auth-form hidden">
+                    <p class="auth-help-text">Recover access with your email, phone number, or Google account.</p>
+                    <label>Email or phone<input id="resetIdentifier" type="text"
+                            placeholder="name@example.com or +231 77 123 4567" /></label>
+                    <div class="auth-inline-actions">
+                        <button type="button" id="resetPasswordButton" class="primary-btn">Send reset link</button>
+                        <button type="button" id="resetGoogleButton" class="secondary-btn">Use Google</button>
+                    </div>
+                    <button type="button" id="showResetPhoneModal" class="ghost-btn provider-btn">Use phone to recover
+                        access</button>
+                    <div id="resetPhoneModal" class="auth-modal hidden">
+                        <div class="auth-method-card">
+                            <label>Phone number<input id="resetPhoneNumber" type="tel"
+                                    placeholder="+231 77 123 4567" /></label>
+                            <div class="auth-inline-actions">
+                                <button type="button" id="resetPhoneSendButton" class="secondary-btn">Send SMS
+                                    code</button>
+                                <button type="button" id="resetPhoneVerifyButton" class="primary-btn">Verify
+                                    code</button>
+                            </div>
+                            <div id="resetPhoneOtpGroup" class="hidden">
+                                <label>SMS code<input id="resetPhoneOtp" inputmode="numeric"
+                                        autocomplete="one-time-code" /></label>
+                            </div>
+                        </div>
+                    </div>
                 </form>
 
                 <div class="action-row">
                     <button id="showRegisterButton" class="ghost-btn">Create account</button>
                     <button id="showLoginButton" class="ghost-btn hidden">Back to login</button>
+                    <button id="showResetButton" class="text-btn">Forgot password?</button>
                 </div>
+                <div id="phoneRecaptchaContainer" class="recaptcha-host" aria-hidden="true"></div>
                 <div id="authMessage" class="auth-message"></div>
             </section>
 
@@ -89,7 +169,6 @@
 
     <script type="module" src="./app.js"></script>
     <script type="module" src="./seed-data.js"></script>
-    <script src="./password-toggle.js"></script>
     <script src="./password-toggle.js"></script>
 </body>
 

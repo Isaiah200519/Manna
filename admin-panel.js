@@ -1,6 +1,7 @@
 import { initFirebase, isFirebaseReady, subscribeCollection, addDocument, updateDocument, deleteDocument, saveDocument, clearStoredAuthState } from './firebase-config.js';
 import { formatCurrency, formatDate, escapeHtml, getInitials, createToast, confirmDialog, getImageUrl, getRestaurantImageUrl, slugify } from './utils.js';
 import { DEFAULT_CATEGORY_TAXONOMY, getCategoryDisplayName, getCategoryOptions } from './category-taxonomy.js';
+import { getQRCardHTML, initQRCode, bindQRDownloadHandlers } from './qr-utils.js';
 
 const state = {
   currentSection: 'dashboard',
@@ -1813,6 +1814,7 @@ window.deleteAnnouncement = (announcementId) => {
 };
 
 function renderNotifications() {
+  const visible = state.data.notifications.filter((item) => !item.isDeleted);
   content.innerHTML = `
     <section class="card">
       <div class="card-header">
@@ -1820,9 +1822,12 @@ function renderNotifications() {
           <h3 class="card-title">Notifications</h3>
           <p class="card-subtitle">Unread and recent platform events</p>
         </div>
+        <div class="row-actions">
+          <button class="ghost-btn" onclick="window.clearAllNotifications()">Clear all</button>
+        </div>
       </div>
       <div class="form-grid">
-        ${state.data.notifications.length ? state.data.notifications.map((notification) => `
+        ${visible.length ? visible.map((notification) => `
           <div class="card" style="padding: 12px;">
             <div class="card-header" style="margin-bottom: 8px">
               <strong>${escapeHtml(notification.title)}</strong>
@@ -1851,9 +1856,20 @@ window.markNotificationRead = (notificationId) => {
 };
 
 window.deleteNotification = (notificationId) => {
-  state.data.notifications = state.data.notifications.filter((item) => item.id !== notificationId);
+  const notification = state.data.notifications.find((item) => item.id === notificationId);
+  if (!notification) return;
+  notification.read = true;
+  notification.isDeleted = true;
   persistData();
   createToast('Notification removed.', 'warning');
+  renderNotifications();
+  updateNotificationBadge();
+};
+
+window.clearAllNotifications = () => {
+  state.data.notifications = state.data.notifications.map((item) => (item.isDeleted ? item : { ...item, read: true, isDeleted: true }));
+  persistData();
+  createToast('All notifications cleared.', 'success');
   renderNotifications();
   updateNotificationBadge();
 };
@@ -1881,6 +1897,9 @@ function renderSettings() {
       </div>
     </section>
   `;
+  content.insertAdjacentHTML('beforeend', getQRCardHTML('adminQrContainer', 'adminQrCard'));
+  initQRCode('adminQrContainer');
+  bindQRDownloadHandlers();
   document.getElementById('saveSettings').addEventListener('click', async () => {
     state.data.settings = {
       ...settings,

@@ -10,6 +10,14 @@ function resolvePanel(role) {
     return map[role] || './customer.html';
 }
 
+if (history.scrollRestoration) {
+    history.scrollRestoration = 'manual';
+}
+
+window.addEventListener('load', () => {
+    window.scrollTo(0, 0);
+});
+
 document.addEventListener('DOMContentLoaded', () => {
     setupAuthRouter({
         onRoleResolved: (role) => {
