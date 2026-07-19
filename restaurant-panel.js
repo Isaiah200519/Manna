@@ -21,6 +21,8 @@ const state = {
     chats: [],
     supportRequests: [],
     deliveryUsers: [],
+    deliveryPartnerRequests: [],
+    helpArticles: [],
     activeSection: 'dashboard',
     viewMode: 'grid',
     activeOrderChatId: null,
@@ -189,7 +191,7 @@ function bindEvents() {
     });
     document.getElementById('saveProfileButton')?.addEventListener('click', saveProfile);
     document.getElementById('saveSettingsButton')?.addEventListener('click', saveSettings);
-    supportButton?.addEventListener('click', toggleSupportModal);
+    supportButton?.addEventListener('click', () => showSection('help'));
     notificationsToggle?.addEventListener('click', () => {
         showSection('notifications');
         if (window.innerWidth <= 780) {
@@ -202,6 +204,7 @@ function bindEvents() {
     document.getElementById('bulkDeactivateButton')?.addEventListener('click', () => bulkUpdateMenu(false));
     document.getElementById('bulkDeleteButton')?.addEventListener('click', bulkDeleteMenu);
     document.getElementById('chatForm')?.addEventListener('submit', submitChat);
+    document.getElementById('inviteDeliveryPartnerForm')?.addEventListener('submit', handleInviteDeliveryPartner);
     modalClose?.addEventListener('click', closeModal);
     modalBackdrop?.addEventListener('click', (event) => {
         if (event.target === modalBackdrop) closeModal();
@@ -691,6 +694,12 @@ function setupRealtimeListeners() {
     }, (error) => {
         console.error('[MANNA] Restaurant delivery requests listener failed:', error);
     });
+    firestore.collection('deliveryPartnerRequests').where('restaurantId', '==', state.restaurantId).onSnapshot((snapshot) => {
+        state.deliveryPartnerRequests = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+        renderDeliveryPartnerRequests();
+    }, (error) => {
+        console.error('[MANNA] Restaurant delivery partner requests listener failed:', error);
+    });
     state.settingsUnsubscribe = firestore.collection('restaurants').doc(state.restaurantId).collection('settings').doc('store').onSnapshot((doc) => {
         state.settings = doc.exists ? doc.data() : {};
         renderSettingsForm();
@@ -702,6 +711,12 @@ function setupRealtimeListeners() {
         renderChat();
     }, (error) => {
         console.error('[MANNA] Restaurant chats listener failed:', error);
+    });
+    firestore.collection('helpArticles').where('targetRoles', 'array-contains', 'restaurant').onSnapshot((snapshot) => {
+        state.helpArticles = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+        renderHelpArticles();
+    }, (error) => {
+        console.error('[MANNA] Restaurant help articles listener failed:', error);
     });
     firestore.collection('supportRequests').where('restaurantId', '==', state.restaurantId).onSnapshot((snapshot) => {
         state.supportRequests = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
@@ -854,6 +869,8 @@ function ensureApprovalBanner() {
 function renderAll() {
     renderDashboard();
     renderProfileForm();
+    renderDeliveryPartnerRequests();
+    renderHelpArticles();
     if (!state.canSell) {
         return;
     }
@@ -877,6 +894,7 @@ function setElementHtml(id, html) {
 
 function renderDashboard() {
     renderDeliveryRequests();
+    renderDeliveryPartnerRequests();
     const stats = [
         { label: 'Today\'s Orders', value: state.orders.filter((order) => isToday(order.createdAt)).length, tone: 'stat-card' },
         { label: 'Today\'s Revenue', value: formatCurrency(sumRevenue(state.orders.filter((order) => isToday(order.createdAt) && ['delivered', 'received'].includes(order.status)))), tone: 'stat-card' },
@@ -910,7 +928,8 @@ function renderDashboard() {
 function renderDeliveryRequests() {
     const list = document.getElementById('deliveryRequestsList');
     if (!list) return;
-    list.innerHTML = state.deliveryRequests.length ? state.deliveryRequests.map((request) => `
+    const visible = (state.deliveryRequests || []).filter((request) => request.restaurantId === state.restaurantId);
+    list.innerHTML = visible.length ? visible.map((request) => `
     <div class="list-item">
       <div class="panel-card-header">
         <strong>${request.deliveryPersonName || 'Delivery person'}</strong>
@@ -1236,12 +1255,143 @@ function renderSupportRequests() {
     </div>`).join('') : '<div class="empty-state">No support requests yet.</div>';
 }
 
+function renderHelpSession() {
+    const formContainer = document.getElementById('helpSessionContent');
+    const articleList = document.getElementById('helpArticlesList');
+    if (!formContainer || !articleList) return;
+    formContainer.innerHTML = `
+    <div class="panel-card">
+      <div class="panel-card-header">
+        <h4>Need help?</h4>
+        <span class="badge">Send a suggestion to MANNA</span>
+      </div>
+      <form id="helpRequestForm" class="form-grid">
+        <label>Topic<select name="category">
+          <option value="account">Account</option>
+          <option value="orders">Orders</option>
+          <option value="payments">Payments</option>
+          <option value="technical">Technical</option>
+          <option value="other">Other</option>
+        </select></label>
+        <label>Subject<input name="subject" value="Support request" /></label>
+        <label class="full">Message<textarea name="message" required placeholder="Tell us what you need help with."></textarea></label>
+        <label>Email<input name="email" value="${state.authUser?.email || ''}" /></label>
+        <div class="modal-actions"><button class="primary-btn" type="submit">Send suggestion</button></div>
+      </form>
+    </div>`;
+    if (!document.getElementById('helpArticleCategoryFilter')) {
+        articleList.insertAdjacentHTML('beforebegin', `
+          <div class="help-filter-row">
+            <select id="helpArticleCategoryFilter">
+              <option value="">All categories</option>
+              <option value="getting started">Getting started</option>
+              <option value="orders">Orders</option>
+              <option value="payments">Payments</option>
+              <option value="account">Account</option>
+              <option value="delivery">Delivery</option>
+              <option value="technical">Technical</option>
+            </select>
+            <input id="helpArticleTagFilter" type="text" placeholder="Filter by tag" />
+          </div>`);
+        document.getElementById('helpArticleCategoryFilter')?.addEventListener('change', renderHelpArticles);
+        document.getElementById('helpArticleTagFilter')?.addEventListener('input', renderHelpArticles);
+    }
+    document.getElementById('helpRequestForm')?.addEventListener('submit', handleHelpRequestSubmit);
+    renderHelpArticles();
+}
+
+async function handleHelpRequestSubmit(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = Object.fromEntries(new FormData(form));
+    const payload = {
+        restaurantId: state.restaurantId,
+        restaurantName: state.restaurantProfile?.businessName || state.restaurantProfile?.name || '',
+        panel: 'restaurant',
+        category: data.category || 'other',
+        subject: data.subject || data.category || 'Support request',
+        message: String(data.message || '').trim(),
+        email: String(data.email || state.authUser?.email || '').trim(),
+        status: 'new',
+        createdAt: new Date()
+    };
+    if (!payload.message) {
+        createToast('Please describe your issue before sending.', 'warning');
+        return;
+    }
+    try {
+        await firestore.collection('supportRequests').add(payload);
+        form.reset();
+        createToast('Support request sent. The admin team will review it.', 'success');
+    } catch (error) {
+        createToast(error.message || 'Unable to send support request.', 'error');
+    }
+}
+
+function renderHelpArticles() {
+    const container = document.getElementById('helpArticlesList');
+    if (!container) return;
+    const categoryFilter = String(document.getElementById('helpArticleCategoryFilter')?.value || '').trim().toLowerCase();
+    const tagFilter = String(document.getElementById('helpArticleTagFilter')?.value || '').trim().toLowerCase();
+    const filteredArticles = state.helpArticles.filter((article) => {
+        const matchesCategory = !categoryFilter || String(article.category || '').trim().toLowerCase() === categoryFilter;
+        const tags = Array.isArray(article.tags) ? article.tags : String(article.tags || '').split(',').map((tag) => tag.trim()).filter(Boolean);
+        const tagText = tags.join(' ').toLowerCase();
+        const matchesTag = !tagFilter || tagText.includes(tagFilter);
+        return matchesCategory && matchesTag;
+    });
+    const featuredArticles = filteredArticles.filter((article) => Boolean(article.featured));
+    const regularArticles = filteredArticles.filter((article) => !article.featured);
+    const renderArticleCard = (article) => `
+    <div class="help-card">
+      <div class="help-card__body">
+        <h4>${article.title || 'Help article'}</h4>
+        <p>${article.description || ''}</p>
+        <div class="action-row" style="flex-wrap: wrap; gap: 8px;">
+          ${article.featured ? '<span class="badge featured-badge">📌 Featured</span>' : ''}
+          ${article.category ? `<span class="badge">${article.category}</span>` : ''}
+          ${(Array.isArray(article.tags) ? article.tags : String(article.tags || '').split(',').map((tag) => tag.trim()).filter(Boolean)).map((tag) => `<span class="badge">${tag}</span>`).join('')}
+        </div>
+        <div class="action-row">
+          ${article.videoUrl ? `<a class="primary-btn" href="${article.videoUrl}" target="_blank" rel="noopener noreferrer">Watch video</a>` : '<span class="badge">Video coming soon</span>'}
+        </div>
+      </div>
+    </div>`;
+    container.innerHTML = filteredArticles.length ? `
+      <div class="stack">
+        ${featuredArticles.length ? `<div class="help-featured-section"><div class="panel-card-header"><h4>Featured guides</h4></div>${featuredArticles.map(renderArticleCard).join('')}</div>` : ''}
+        ${regularArticles.length ? `<div class="help-featured-section"><div class="panel-card-header"><h4>More guides</h4></div>${regularArticles.map(renderArticleCard).join('')}</div>` : ''}
+      </div>` : '<div class="empty-state">No help articles match the current filters.</div>';
+}
+
+function renderDeliveryPartnerRequests() {
+    const container = document.getElementById('deliveryPartnerRequestsList');
+    if (!container) return;
+    const entries = state.deliveryPartnerRequests || [];
+    container.innerHTML = entries.length ? entries.map((request) => `
+    <div class="list-item">
+      <div class="panel-card-header">
+        <strong>${request.deliveryPersonName || 'Delivery person'}</strong>
+        <span class="badge">${request.status || 'pending'}</span>
+      </div>
+      <div class="muted">${request.deliveryPersonEmail || ''}</div>
+      <div class="muted">${request.message || 'Requested to join your delivery network.'}</div>
+      ${request.status === 'pending' ? `<div class="modal-actions"><button class="primary-btn" data-delivery-request-action="approve" data-delivery-request-id="${request.id}">Approve</button><button class="ghost-btn" data-delivery-request-action="reject" data-delivery-request-id="${request.id}">Reject</button></div>` : ''}
+    </div>`).join('') : '<div class="empty-state">No delivery partner requests yet.</div>';
+    document.querySelectorAll('[data-delivery-request-action]').forEach((button) => {
+        button.addEventListener('click', () => handleDeliveryRequestAction(button.dataset.deliveryRequestAction, button.dataset.deliveryRequestId));
+    });
+}
+
 function showSection(section) {
     const allowedSection = state.canSell || section === 'profile' ? section : 'profile';
     state.activeSection = allowedSection;
     setActiveNavigation(allowedSection);
     setMobileNavOpen(false);
     sectionPanels.forEach((panel) => panel.classList.toggle('active', panel.id === `${allowedSection}Section`));
+    if (allowedSection === 'help') {
+        renderHelpSession();
+    }
     const titleMap = {
         dashboard: ['Dashboard', 'Track menu performance and orders in real time.'],
         profile: ['Profile', 'Keep your restaurant profile accurate and current.'],
@@ -1254,6 +1404,8 @@ function showSection(section) {
         analytics: ['Analytics', 'Measure performance and growth.'],
         notifications: ['Notifications', 'Follow new order and store activity.'],
         settings: ['Settings', 'Tune your store preferences.'],
+        'delivery-partners': ['Delivery Partners', 'Invite and approve delivery partners for your store.'],
+        help: ['Help Center', 'Find guides and support resources for restaurants.'],
         chat: ['Chat', 'Open a future-ready support conversation.']
     };
     const [title, subtitle] = titleMap[allowedSection] || titleMap.dashboard;
@@ -1286,6 +1438,34 @@ async function handleDeliveryRequestAction(action, requestId) {
         }
     } catch (error) {
         createToast(error.message || 'Unable to update the delivery request.', 'error');
+    }
+}
+
+async function handleInviteDeliveryPartner(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const payload = {
+        restaurantId: state.restaurantId,
+        restaurantName: state.restaurantProfile?.businessName || state.restaurantProfile?.name || '',
+        deliveryPersonName: String(formData.get('deliveryPersonName') || '').trim(),
+        deliveryPersonEmail: String(formData.get('deliveryPersonEmail') || '').trim(),
+        deliveryPersonPhone: String(formData.get('deliveryPersonPhone') || '').trim(),
+        message: String(formData.get('message') || '').trim(),
+        status: 'pending',
+        createdAt: new Date(),
+        updatedAt: new Date()
+    };
+    if (!payload.deliveryPersonName && !payload.deliveryPersonEmail) {
+        createToast('Please add a partner name or email before sending the invite.', 'warning');
+        return;
+    }
+    try {
+        await firestore.collection('deliveryPartnerRequests').add(payload);
+        form.reset();
+        createToast('Invitation sent to the delivery partner.', 'success');
+    } catch (error) {
+        createToast(error.message || 'Unable to send the invitation.', 'error');
     }
 }
 

@@ -41,7 +41,8 @@ const state = {
     filters: { category: 'all', sort: 'rating' },
     orderFilter: 'all',
     deliveryFee: 60,
-    notifications: []
+    notifications: [],
+    helpArticles: []
 };
 
 const authScreen = document.getElementById('authScreen');
@@ -529,6 +530,14 @@ function setupRealtimeListeners(userId) {
         renderNotifications();
     }, (error) => {
         console.error('[MANNA] Customer notifications listener failed:', error);
+    });
+    firestore.collection('helpArticles').where('targetRoles', 'array-contains', 'customer').onSnapshot((snapshot) => {
+        state.helpArticles = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+        if (state.activeSection === 'help') {
+            renderHelpArticles();
+        }
+    }, (error) => {
+        console.error('[MANNA] Customer help articles listener failed:', error);
     });
     state.addressesUnsubscribe = firestore.collection('users').doc(userId).collection('addresses').onSnapshot((snapshot) => {
         state.addresses = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
@@ -1394,6 +1403,106 @@ function renderSettingsForm() {
     document.getElementById('changePasswordButton').addEventListener('click', () => createToast('Password reset is available through Firebase Auth.', 'info'));
 }
 
+function renderHelpSession() {
+    const formContainer = document.getElementById('helpSessionContent');
+    const articlesContainer = document.getElementById('helpArticlesList');
+    if (!formContainer || !articlesContainer) return;
+    formContainer.innerHTML = `
+      <div class="panel-card">
+        <div class="panel-card-header">
+          <h4>Need help?</h4>
+          <span class="badge">Send a suggestion to MANNA</span>
+        </div>
+        <form id="helpRequestForm" class="form-grid">
+          <label>Topic<select name="category"><option value="orders">Orders</option><option value="account">Account</option><option value="payments">Payments</option><option value="technical">Technical</option><option value="other">Other</option></select></label>
+          <label class="full">Message<textarea name="message" required placeholder="Tell us what you need help with."></textarea></label>
+          <label>Email<input name="email" value="${state.authUser?.email || ''}" /></label>
+          <div class="modal-actions"><button class="primary-btn" type="submit">Send suggestion</button></div>
+        </form>
+      </div>`;
+    if (!document.getElementById('helpArticleCategoryFilter')) {
+        articlesContainer.insertAdjacentHTML('beforebegin', `
+          <div class="help-filter-row">
+            <select id="helpArticleCategoryFilter">
+              <option value="">All categories</option>
+              <option value="getting started">Getting started</option>
+              <option value="orders">Orders</option>
+              <option value="payments">Payments</option>
+              <option value="account">Account</option>
+              <option value="delivery">Delivery</option>
+              <option value="technical">Technical</option>
+            </select>
+            <input id="helpArticleTagFilter" type="text" placeholder="Filter by tag" />
+          </div>`);
+        document.getElementById('helpArticleCategoryFilter')?.addEventListener('change', renderHelpArticles);
+        document.getElementById('helpArticleTagFilter')?.addEventListener('input', renderHelpArticles);
+    }
+    document.getElementById('helpRequestForm')?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const data = Object.fromEntries(new FormData(form));
+        const payload = {
+            panel: 'customer',
+            category: String(data.category || 'other'),
+            subject: String(data.category || 'Support request'),
+            message: String(data.message || '').trim(),
+            email: String(data.email || state.authUser?.email || '').trim(),
+            userId: state.authUser?.uid || '',
+            status: 'new',
+            createdAt: new Date()
+        };
+        if (!payload.message) {
+            createToast('Please describe your issue before sending.', 'warning');
+            return;
+        }
+        try {
+            await firestore.collection('supportRequests').add(payload);
+            form.reset();
+            createToast('Support request sent. The admin team will review it.', 'success');
+        } catch (error) {
+            createToast(error.message || 'Unable to send support request.', 'error');
+        }
+    });
+    renderHelpArticles();
+}
+
+function renderHelpArticles() {
+    const container = document.getElementById('helpArticlesList');
+    if (!container) return;
+    const categoryFilter = String(document.getElementById('helpArticleCategoryFilter')?.value || '').trim().toLowerCase();
+    const tagFilter = String(document.getElementById('helpArticleTagFilter')?.value || '').trim().toLowerCase();
+    const filteredArticles = state.helpArticles.filter((article) => {
+        const matchesCategory = !categoryFilter || String(article.category || '').trim().toLowerCase() === categoryFilter;
+        const tags = Array.isArray(article.tags) ? article.tags : String(article.tags || '').split(',').map((tag) => tag.trim()).filter(Boolean);
+        const tagText = tags.join(' ').toLowerCase();
+        const matchesTag = !tagFilter || tagText.includes(tagFilter);
+        return matchesCategory && matchesTag;
+    });
+    const featuredArticles = filteredArticles.filter((article) => Boolean(article.featured));
+    const regularArticles = filteredArticles.filter((article) => !article.featured);
+    const renderArticleCard = (article) => `
+      <div class="help-card">
+        <img src="${article.image ? `images/help-video-images/${article.image}` : 'images/placeholders/wrap.jpg'}" alt="${article.title || 'Help guide'}" onerror="this.src='images/placeholders/wrap.jpg'" />
+        <div class="help-card__body">
+          <h4>${article.title || 'Help article'}</h4>
+          <p>${article.description || ''}</p>
+          <div class="action-row" style="flex-wrap: wrap; gap: 8px;">
+            ${article.featured ? '<span class="badge featured-badge">📌 Featured</span>' : ''}
+            ${article.category ? `<span class="badge">${article.category}</span>` : ''}
+            ${(Array.isArray(article.tags) ? article.tags : String(article.tags || '').split(',').map((tag) => tag.trim()).filter(Boolean)).map((tag) => `<span class="badge">${tag}</span>`).join('')}
+          </div>
+          <div class="action-row">
+            ${article.videoUrl ? `<a class="primary-btn" href="${article.videoUrl}" target="_blank" rel="noopener noreferrer">Watch Video</a>` : '<span class="badge">Video coming soon</span>'}
+          </div>
+        </div>
+      </div>`;
+    container.innerHTML = filteredArticles.length ? `
+      <div class="stack">
+        ${featuredArticles.length ? `<div class="help-featured-section"><div class="panel-card-header"><h4>Featured guides</h4></div>${featuredArticles.map(renderArticleCard).join('')}</div>` : ''}
+        ${regularArticles.length ? `<div class="help-featured-section"><div class="panel-card-header"><h4>More guides</h4></div>${regularArticles.map(renderArticleCard).join('')}</div>` : ''}
+      </div>` : '<div class="empty-state">No help articles match the current filters.</div>';
+}
+
 function showSection(section) {
     if (section === 'cart') {
         section = 'checkout';
@@ -1414,6 +1523,8 @@ function showSection(section) {
         renderRestaurants();
     } else if (section === 'home') {
         renderHome();
+    } else if (section === 'help') {
+        renderHelpSession();
     }
     const titleMap = {
         home: ['Home', 'Find food, place orders, and track deliveries.'],
@@ -1423,7 +1534,8 @@ function showSection(section) {
         favorites: ['Favorites', 'Your saved restaurants and food.'],
         profile: ['Profile', 'Manage your address and personal details.'],
         settings: ['Settings', 'Adjust your experience and preferences.'],
-        checkout: ['Checkout', 'Complete your order with mobile money.']
+        checkout: ['Checkout', 'Complete your order with mobile money.'],
+        help: ['Help Center', 'Find quick guides and support material for customers.']
     };
     const [title, subtitle] = titleMap[section] || titleMap.home;
     pageTitle.textContent = title;

@@ -153,6 +153,13 @@
                             <path d="M8 10h8" />
                             <path d="M8 13h5" />
                         </svg></span><span>Reviews</span></button>
+                <button class="nav-item" data-section="delivery-partners"><span class="nav-icon"><svg
+                            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M5 21V8" />
+                            <path d="M19 21V5" />
+                            <path d="M5 8l7-3 7 3" />
+                            <path d="M9 21v-5h6v5" />
+                        </svg></span><span>Delivery Partners</span></button>
                 <button class="nav-item" data-section="promotions"><span class="nav-icon"><svg viewBox="0 0 24 24"
                             fill="none" stroke="currentColor" stroke-width="1.8">
                             <path d="M6 3h12v6l-2 2 2 2v6H6v-6l2-2-2-2z" />
@@ -178,6 +185,12 @@
                             <path
                                 d="M19 12a7 7 0 00-.1-1l2.2-1.7-2-3.5-2.7 1.1a7 7 0 00-1.7-1L14 3h-4l-.7 2.9a7 7 0 00-1.7 1L4.9 5.8l-2 3.5 2.2 1.7a7 7 0 000 2l-2.2 1.7 2 3.5 2.7-1.1a7 7 0 001.7 1L10 21h4l.7-2.9a7 7 0 001.7-1l2.7 1.1 2-3.5-2.2-1.7c.1-.3.1-.7.1-1z" />
                         </svg></span><span>Settings</span></button>
+                <button class="nav-item" data-section="help"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="1.8">
+                            <path d="M12 3a9 9 0 100 18 9 9 0 000-18z" />
+                            <path d="M12 15v1" />
+                            <path d="M10 8.5a2 2 0 113.8 1.7c-.4.2-.8.6-.8 1.3v.5" />
+                        </svg></span><span>Help Center</span></button>
                 <button class="nav-item" data-section="chat"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none"
                             stroke="currentColor" stroke-width="1.8">
                             <path d="M5 6h14v8H8l-3 3V6z" />
@@ -232,6 +245,12 @@
                                 <path
                                     d="M19 12a7 7 0 00-.1-1l2.2-1.7-2-3.5-2.7 1.1a7 7 0 00-1.7-1L14 3h-4l-.7 2.9a7 7 0 00-1.7 1L4.9 5.8l-2 3.5 2.2 1.7a7 7 0 000 2l-2.2 1.7 2 3.5 2.7-1.1a7 7 0 001.7 1L10 21h4l.7-2.9a7 7 0 001.7-1l2.7 1.1 2-3.5-2.2-1.7c.1-.3.1-.7.1-1z" />
                             </svg></span><span>Settings</span></button>
+                    <button class="nav-item mobile-nav-item" data-section="help"><span class="nav-icon"><svg
+                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                <path d="M12 3a9 9 0 100 18 9 9 0 000-18z" />
+                                <path d="M12 15v1" />
+                                <path d="M10 8.5a2 2 0 113.8 1.7c-.4.2-.8.6-.8 1.3v.5" />
+                            </svg></span><span>Help Center</span></button>
                 </nav>
                 <div class="mobile-nav-sheet__footer">
                     <button id="mobileLogoutButton" class="ghost-btn">Logout</button>
@@ -389,6 +408,28 @@
                 </div>
             </section>
 
+            <section id="deliveryPartnersSection" class="section-panel">
+                <div class="panel-card">
+                    <div class="panel-card-header">
+                        <h3>Delivery Partners</h3>
+                        <span class="badge">Requests & approvals</span>
+                    </div>
+                    <form id="inviteDeliveryPartnerForm" class="form-grid invite-form">
+                        <label class="full">Delivery partner name<input name="deliveryPersonName"
+                                placeholder="Jane Doe" /></label>
+                        <label>Email<input name="deliveryPersonEmail" type="email"
+                                placeholder="partner@example.com" /></label>
+                        <label>Phone<input name="deliveryPersonPhone" placeholder="0770123456" /></label>
+                        <label class="full">Invitation note<textarea name="message"
+                                placeholder="Add a short note for the partner"></textarea></label>
+                        <div class="modal-actions">
+                            <button class="primary-btn" type="submit">Send invite</button>
+                        </div>
+                    </form>
+                    <div id="deliveryPartnerRequestsList" class="list-stack"></div>
+                </div>
+            </section>
+
             <section id="promotionsSection" class="section-panel">
                 <div class="panel-card">
                     <div class="panel-card-header">
@@ -456,6 +497,17 @@
                         <span class="badge">Help center</span>
                     </div>
                     <div id="supportRequestsList" class="list-stack"></div>
+                </div>
+            </section>
+
+            <section id="helpSection" class="section-panel">
+                <div class="panel-card">
+                    <div class="panel-card-header">
+                        <h3>Help Center</h3>
+                        <span class="badge">Guides & tips</span>
+                    </div>
+                    <div id="helpSessionContent" class="stack"></div>
+                    <div id="helpArticlesList" class="card-grid"></div>
                 </div>
             </section>
 

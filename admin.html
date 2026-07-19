@@ -144,6 +144,12 @@
                             <path d="M7 4h10l2 2v12l-2 2H7l-2-2V6l2-2z" />
                             <path d="M9 8h6M9 12h6M9 16h4" />
                         </svg></span><span>System Logs</span></button>
+                <button class="nav-item" data-section="help"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="1.8">
+                            <path d="M12 3a9 9 0 100 18 9 9 0 000-18z" />
+                            <path d="M12 15v1" />
+                            <path d="M10 8.5a2 2 0 113.8 1.7c-.4.2-.8.6-.8 1.3v.5" />
+                        </svg></span><span>Help Center</span></button>
                 <button class="nav-item danger" id="logoutButton"><span class="nav-icon"><svg viewBox="0 0 24 24"
                             fill="none" stroke="currentColor" stroke-width="1.8">
                             <path d="M10 17l-4-4 4-4" />
@@ -305,6 +311,15 @@
             </div>
 
             <main id="content" class="content"></main>
+            <section id="helpSection" class="section-panel hidden">
+                <div class="panel-card">
+                    <div class="panel-card-header">
+                        <h3>Help Center</h3>
+                        <button id="createHelpArticleButton" class="primary-btn">Create Article</button>
+                    </div>
+                    <div id="helpArticlesList" class="card-grid"></div>
+                </div>
+            </section>
         </div>
     </div>
 

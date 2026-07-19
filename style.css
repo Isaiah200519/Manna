@@ -952,9 +952,14 @@ select {
     top: 0;
     height: 100vh;
     height: 100dvh;
+    max-height: 100vh;
+    max-height: 100dvh;
     overflow: hidden;
     flex-shrink: 0;
     backdrop-filter: blur(18px);
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
 }
 
 @media (min-width: 768px) {
@@ -1013,8 +1018,16 @@ select {
 
 .nav-links,
 .sidebar-nav {
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: var(--space-sm);
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 4px;
+    padding-bottom: 8px;
+    overscroll-behavior: contain;
 }
 
 .nav-item,
@@ -1054,6 +1067,12 @@ select {
 
 .sidebar-footer {
     margin-top: var(--space-lg);
+}
+
+.nav-item.danger,
+.sidebar .nav-item.danger {
+    margin-top: auto;
+    margin-bottom: 0;
 }
 
 .main-panel {
@@ -2038,6 +2057,89 @@ tr:last-child td {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.help-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    padding: var(--space-md);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+}
+
+.help-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.help-card__body h4 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.help-card__body p {
+    margin: 0;
+    color: var(--text-muted);
+    line-height: 1.6;
+}
+
+.help-filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.help-filter-row select,
+.help-filter-row input {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-2);
+    color: var(--text-primary);
+    padding: 8px 10px;
+    min-width: 170px;
+}
+
+.help-suggestion-feed-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-md);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+}
+
+.help-featured-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.help-featured-section .help-card {
+    border: 1px solid rgba(255, 167, 38, 0.35);
+    box-shadow: 0 10px 24px rgba(255, 167, 38, 0.12);
+    background: linear-gradient(135deg, rgba(255, 167, 38, 0.08), rgba(255, 167, 38, 0.02));
+}
+
+.help-featured-section .panel-card-header h4 {
+    color: var(--accent);
+}
+
+.featured-badge {
+    background: linear-gradient(135deg, var(--accent), #ffb84d);
+    color: #1f1f1f;
+    font-weight: 700;
+}
+
+.invite-form {
+    margin-bottom: var(--space-md);
+}
+
 .product-card {
     overflow: hidden;
     position: relative;
@@ -2574,6 +2676,11 @@ tr:last-child td {
 
     .sidebar .sidebar-close {
         display: inline-flex;
+    }
+
+    .sidebar .nav-links,
+    .sidebar .sidebar-nav {
+        max-height: calc(100vh - 168px);
     }
 
     .main-panel {

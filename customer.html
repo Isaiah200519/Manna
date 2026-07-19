@@ -129,6 +129,12 @@
                             <path
                                 d="M19 12a7 7 0 00-.1-1l2.2-1.7-2-3.5-2.7 1.1a7 7 0 00-1.7-1L14 3h-4l-.7 2.9a7 7 0 00-1.7 1L4.9 5.8l-2 3.5 2.2 1.7a7 7 0 000 2l-2.2 1.7 2 3.5 2.7-1.1a7 7 0 001.7 1L10 21h4l.7-2.9a7 7 0 001.7-1l2.7 1.1 2-3.5-2.2-1.7c.1-.3.1-.7.1-1z" />
                         </svg></span><span>Settings</span></button>
+                <button class="nav-item" data-section="help"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="1.8">
+                            <path d="M12 3a9 9 0 100 18 9 9 0 000-18z" />
+                            <path d="M12 15v1" />
+                            <path d="M10 8.5a2 2 0 113.8 1.7c-.4.2-.8.6-.8 1.3v.5" />
+                        </svg></span><span>Help</span></button>
             </nav>
             <div class="sidebar-footer">
                 <button id="logoutButton" class="ghost-btn">Logout</button>
@@ -322,6 +328,17 @@
                 <div class="panel-card">
                     <h3>Settings</h3>
                     <form id="settingsForm" class="form-grid"></form>
+                </div>
+            </section>
+
+            <section id="helpSection" class="section-panel">
+                <div class="panel-card">
+                    <div class="panel-card-header">
+                        <h3>Help Center</h3>
+                        <span class="badge">Guides</span>
+                    </div>
+                    <div id="helpSessionContent" class="stack"></div>
+                    <div id="helpArticlesList" class="card-grid"></div>
                 </div>
             </section>
 

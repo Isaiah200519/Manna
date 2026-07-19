@@ -33,7 +33,10 @@ const state = {
     selectedProducts: new Set(),
     modal: null,
     unsubscribe: [],
-    chartPoints: []
+    chartPoints: [],
+    adminSessionUnsubscribe: null,
+    adminSessionMessages: [],
+    adminSessionId: null
   }
 };
 
@@ -275,11 +278,7 @@ function attachEvents() {
   });
 
   document.getElementById('supportButton')?.addEventListener('click', () => {
-    if (modalRoot.classList.contains('open')) {
-      closeModal();
-    } else {
-      openSupportModal();
-    }
+    openSection('help');
   });
   document.getElementById('notificationsToggle').addEventListener('click', () => {
     // mark all notifications read and open the notifications section
@@ -287,7 +286,7 @@ function attachEvents() {
     updateNotificationBadge();
     openSection && openSection('notifications');
   });
-  document.getElementById('messagesButton').addEventListener('click', () => createToast('Messaging hub is ready for the next release.', 'info'));
+  document.getElementById('messagesButton').addEventListener('click', () => openAdminMessageSession());
   const adminLogout = async () => {
     const { auth } = initFirebase();
     try {
@@ -346,6 +345,116 @@ function attachEvents() {
   document.addEventListener('click', (event) => {
     if (!event.target.closest('.search-wrap')) {
       searchResults.classList.remove('open');
+    }
+  });
+}
+
+function clearAdminMessageSession() {
+  if (state.ui.adminSessionUnsubscribe) {
+    state.ui.adminSessionUnsubscribe();
+    state.ui.adminSessionUnsubscribe = null;
+  }
+  state.ui.adminSessionMessages = [];
+  state.ui.adminSessionId = null;
+}
+
+function renderAdminMessageSession() {
+  const container = document.getElementById('adminSessionMessages');
+  if (!container) return;
+
+  if (!state.ui.adminSessionMessages.length) {
+    container.innerHTML = '<div class="empty-state">No messages yet. Start the conversation.</div>';
+    return;
+  }
+
+  container.innerHTML = state.ui.adminSessionMessages.map((message) => {
+    const isMine = message.senderUid === state.user.uid;
+    const timeLabel = message.createdAt ? new Date(message.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+    return `
+      <div style="display:flex; justify-content:${isMine ? 'flex-end' : 'flex-start'};">
+        <div style="max-width: 78%; padding: 10px 12px; border-radius: 12px; background: ${isMine ? 'rgba(249, 115, 22, 0.16)' : 'rgba(255, 255, 255, 0.06)'}; border: 1px solid ${isMine ? 'rgba(249, 115, 22, 0.28)' : 'rgba(255,255,255,0.1)'}; color: var(--text-main);">
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">${escapeHtml(message.senderName || (isMine ? 'You' : 'Admin session'))}${timeLabel ? ` • ${escapeHtml(timeLabel)}` : ''}</div>
+          <div>${escapeHtml(message.text || '')}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  container.scrollTop = container.scrollHeight;
+}
+
+async function openAdminMessageSession() {
+  const { db, ready } = initFirebase();
+  if (!ready || !db) {
+    createToast('Firebase is unavailable right now. The live admin session could not be opened.', 'error');
+    return;
+  }
+
+  clearAdminMessageSession();
+  const sessionId = `admin-${state.user.uid || 'admin'}`;
+  state.ui.adminSessionId = sessionId;
+
+  await db.collection('adminSessions').doc(sessionId).set({
+    sessionId,
+    panel: 'admin',
+    title: 'Admin message session',
+    participantUid: state.user.uid || 'admin',
+    participantName: state.user.displayName || 'Admin',
+    status: 'active',
+    createdAt: new Date(),
+    updatedAt: new Date()
+  }, { merge: true });
+
+  openModal('Admin Message Session', `
+    <div style="display: flex; flex-direction: column; gap: 12px; min-height: 380px;">
+      <div style="padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 12px; background: rgba(255,255,255,0.03); color: var(--text-muted);">
+        Live session for <strong>${escapeHtml(state.user.displayName || 'Admin')}</strong>. Messages sync instantly.
+      </div>
+      <div id="adminSessionMessages" style="max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px;"></div>
+      <form id="adminSessionForm" style="display: flex; gap: 8px;">
+        <input id="adminSessionInput" type="text" maxlength="500" placeholder="Type a message..." style="flex: 1; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border-color); background: rgba(255,255,255,0.04); color: var(--text-main);" />
+        <button class="primary-btn" type="submit">Send</button>
+      </form>
+    </div>
+  `);
+
+  const sessionRef = db.collection('adminSessions').doc(sessionId).collection('messages');
+  state.ui.adminSessionUnsubscribe = sessionRef.orderBy('createdAt', 'asc').onSnapshot((snapshot) => {
+    state.ui.adminSessionMessages = snapshot.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt
+      };
+    });
+    renderAdminMessageSession();
+  }, (error) => {
+    console.error('[MANNA] Admin message session listener failed:', error);
+    createToast('The live session is temporarily unavailable.', 'warning');
+  });
+
+  document.getElementById('adminSessionForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const input = document.getElementById('adminSessionInput');
+    const text = input.value.trim();
+    if (!text) return;
+
+    try {
+      await sessionRef.add({
+        sessionId,
+        text,
+        senderUid: state.user.uid || 'admin',
+        senderName: state.user.displayName || 'Admin',
+        senderRole: 'admin',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        read: false,
+        isDeleted: false
+      });
+      input.value = '';
+    } catch (error) {
+      createToast(error.message || 'Unable to send the message.', 'error');
     }
   });
 }
@@ -416,7 +525,8 @@ function openSection(section) {
     announcements: 'Announcements',
     notifications: 'Notifications',
     settings: 'Settings',
-    logs: 'System Logs'
+    logs: 'System Logs',
+    help: 'Help Center'
   };
   pageTitle.textContent = titles[section] || 'Overview';
   breadcrumb.textContent = `Home / ${pageTitle.textContent}`;
@@ -463,6 +573,9 @@ function renderSection(section) {
       break;
     case 'logs':
       renderLogs();
+      break;
+    case 'help':
+      renderHelpCenter();
       break;
     default:
       renderDashboard();
@@ -1927,6 +2040,241 @@ function renderSettings() {
   });
 }
 
+function renderHelpCenter() {
+  content.innerHTML = `
+    <section class="card">
+      <div class="card-header">
+        <div>
+          <h3 class="card-title">Help Center</h3>
+          <p class="card-subtitle">Manage help articles and review incoming help suggestions from customers, restaurants, and delivery partners.</p>
+        </div>
+      </div>
+      <div class="stack">
+        <div class="panel-card">
+          <div class="panel-card-header">
+            <h4>Incoming suggestions</h4>
+            <span class="badge">${(state.data.supportRequests || []).filter((request) => !['reviewed', 'resolved'].includes(String(request.status || '').toLowerCase())).length} pending</span>
+          </div>
+          <div id="helpSuggestionsList" class="list-stack"></div>
+        </div>
+        <div class="panel-card">
+          <div class="panel-card-header">
+            <h4>Help articles</h4>
+            <button class="primary-btn" id="openHelpArticleModal">Create article</button>
+          </div>
+          <div class="help-filter-row">
+            <select id="helpArticleCategoryFilter">
+              <option value="">All categories</option>
+              <option value="getting started">Getting started</option>
+              <option value="orders">Orders</option>
+              <option value="payments">Payments</option>
+              <option value="account">Account</option>
+              <option value="delivery">Delivery</option>
+              <option value="technical">Technical</option>
+            </select>
+            <input id="helpArticleTagFilter" type="text" placeholder="Filter by tag" />
+          </div>
+          <div id="helpArticlesList" class="card-grid"></div>
+        </div>
+      </div>
+    </section>
+  `;
+  document.getElementById('openHelpArticleModal')?.addEventListener('click', openHelpArticleModal);
+  renderHelpSuggestions();
+  renderHelpArticleCards();
+}
+
+function renderHelpSuggestions() {
+  const container = document.getElementById('helpSuggestionsList');
+  if (!container) return;
+  const suggestions = (state.data.supportRequests || [])
+    .slice()
+    .sort((first, second) => new Date(second.createdAt || 0) - new Date(first.createdAt || 0))
+    .slice(0, 6);
+  container.innerHTML = suggestions.length ? suggestions.map((request) => {
+    const status = String(request.status || 'new').toLowerCase();
+    const preview = String(request.message || '').trim();
+    const previewText = preview.length > 140 ? `${preview.slice(0, 137)}...` : preview;
+    const sourceText = [request.panel || 'panel', request.email || 'No email'].filter(Boolean).join(' • ');
+    return `
+      <div class="list-item help-suggestion-feed-item">
+        <div class="panel-card-header">
+          <strong>${escapeHtml(request.subject || request.category || 'Help suggestion')}</strong>
+          <span class="badge">${escapeHtml(status)}</span>
+        </div>
+        <div class="body-small">${escapeHtml(sourceText)}</div>
+        <div class="muted">${escapeHtml(previewText || 'No details provided yet.')}</div>
+        <div class="body-small">${escapeHtml(formatDate(request.createdAt) || 'Recently received')}</div>
+        <div class="row-actions">
+          <button class="primary-btn" data-help-request-action="reviewed" data-help-request-id="${escapeHtml(request.id || '')}" type="button">Mark reviewed</button>
+          <button class="ghost-btn" data-help-request-action="resolved" data-help-request-id="${escapeHtml(request.id || '')}" type="button">Resolve</button>
+        </div>
+      </div>`;
+  }).join('') : '<div class="empty-state">No recent suggestions yet.</div>';
+  container.querySelectorAll('[data-help-request-action]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const id = button.getAttribute('data-help-request-id');
+      const action = button.getAttribute('data-help-request-action');
+      if (!id) return;
+      try {
+        await updateDocument('supportRequests', id, { status: action, updatedAt: new Date().toISOString() });
+        createToast('Suggestion updated.', 'success');
+        renderHelpSuggestions();
+      } catch (error) {
+        createToast(error.message || 'Unable to update the suggestion.', 'error');
+      }
+    });
+  });
+}
+
+function getHelpArticleImage(article) {
+  return article.image ? `images/help-video-images/${article.image}` : 'images/placeholders/wrap.jpg';
+}
+
+function normalizeHelpArticleTags(value) {
+  if (Array.isArray(value)) {
+    return value.map((tag) => String(tag || '').trim()).filter(Boolean);
+  }
+  return String(value || '')
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
+
+function renderHelpArticleCards() {
+  const container = document.getElementById('helpArticlesList');
+  if (!container) return;
+  const categoryFilter = String(document.getElementById('helpArticleCategoryFilter')?.value || '').trim().toLowerCase();
+  const tagFilter = String(document.getElementById('helpArticleTagFilter')?.value || '').trim().toLowerCase();
+  const articles = (state.data.helpArticles || [])
+    .slice()
+    .filter((article) => {
+      const matchesCategory = !categoryFilter || String(article.category || '').trim().toLowerCase() === categoryFilter;
+      const tags = normalizeHelpArticleTags(article.tags || []);
+      const tagText = tags.join(' ').toLowerCase();
+      const matchesTag = !tagFilter || tagText.includes(tagFilter);
+      return matchesCategory && matchesTag;
+    })
+    .sort((first, second) => new Date(second.createdAt || 0) - new Date(first.createdAt || 0));
+  const featuredArticles = articles.filter((article) => Boolean(article.featured));
+  const regularArticles = articles.filter((article) => !article.featured);
+  const renderArticleCard = (article) => {
+    const tags = normalizeHelpArticleTags(article.tags || []);
+    return `
+    <article class="help-card">
+      <div class="help-card__body">
+        <h4>${escapeHtml(article.title || 'Help article')}</h4>
+        <p>${escapeHtml(article.description || '')}</p>
+        <div class="body-small">Target roles: ${escapeHtml((article.targetRoles || []).join(', ') || 'All')}</div>
+        <div class="row-actions" style="margin-top: 10px; flex-wrap: wrap; gap: 8px;">
+          ${article.featured ? '<span class="badge featured-badge">📌 Featured</span>' : ''}
+          ${article.category ? `<span class="badge">${escapeHtml(article.category)}</span>` : ''}
+          ${tags.map((tag) => `<span class="badge">${escapeHtml(tag)}</span>`).join('')}
+        </div>
+        <div class="row-actions" style="margin-top: 10px;">
+          ${article.videoUrl ? `<a class="primary-btn" href="${escapeHtml(article.videoUrl)}" target="_blank" rel="noopener noreferrer">Watch video</a>` : '<span class="badge">Video coming soon</span>'}
+          <button class="ghost-btn" data-edit-help-article="${escapeHtml(article.id || '')}" type="button">Edit</button>
+          <button class="ghost-btn" data-delete-help-article="${escapeHtml(article.id || '')}" type="button">Delete</button>
+        </div>
+      </div>
+    </article>`;
+  };
+  container.innerHTML = articles.length ? `
+    <div class="stack">
+      ${featuredArticles.length ? `<div class="help-featured-section"><div class="panel-card-header"><h4>Featured guides</h4></div>${featuredArticles.map(renderArticleCard).join('')}</div>` : ''}
+      ${regularArticles.length ? `<div class="help-featured-section"><div class="panel-card-header"><h4>More guides</h4></div>${regularArticles.map(renderArticleCard).join('')}</div>` : ''}
+    </div>` : renderEmptyState('No help articles yet', 'Create guides for the customer, restaurant, or delivery experience.');
+  document.getElementById('helpArticleCategoryFilter')?.addEventListener('change', renderHelpArticleCards);
+  document.getElementById('helpArticleTagFilter')?.addEventListener('input', renderHelpArticleCards);
+  container.querySelectorAll('[data-edit-help-article]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.getAttribute('data-edit-help-article');
+      const article = (state.data.helpArticles || []).find((entry) => entry.id === id);
+      if (article) {
+        openHelpArticleModal(article);
+      }
+    });
+  });
+  container.querySelectorAll('[data-delete-help-article]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const id = button.getAttribute('data-delete-help-article');
+      if (!id) return;
+      try {
+        await deleteDocument('helpArticles', id);
+        createToast('Help article removed.', 'success');
+      } catch (error) {
+        createToast(error.message || 'Unable to delete the article.', 'error');
+      }
+    });
+  });
+}
+
+function openHelpArticleModal(article = null) {
+  const isEditing = Boolean(article?.id);
+  openModal(isEditing ? 'Edit Help Article' : 'Create Help Article', `
+    <form id="helpArticleForm" class="form-grid" style="padding: 8px 0;">
+      <label>Title<input name="title" value="${escapeHtml(article?.title || '')}" required /></label>
+      <label>Image<input name="image" value="${escapeHtml(article?.image || '')}" placeholder="help-image.jpg" /></label>
+      <label>Category<select name="category">
+        <option value="" ${!article?.category ? 'selected' : ''}>Choose category</option>
+        <option value="Getting started" ${article?.category === 'Getting started' ? 'selected' : ''}>Getting started</option>
+        <option value="Orders" ${article?.category === 'Orders' ? 'selected' : ''}>Orders</option>
+        <option value="Payments" ${article?.category === 'Payments' ? 'selected' : ''}>Payments</option>
+        <option value="Account" ${article?.category === 'Account' ? 'selected' : ''}>Account</option>
+        <option value="Delivery" ${article?.category === 'Delivery' ? 'selected' : ''}>Delivery</option>
+        <option value="Technical" ${article?.category === 'Technical' ? 'selected' : ''}>Technical</option>
+      </select></label>
+      <label>Tags<input name="tags" value="${escapeHtml((Array.isArray(article?.tags) ? article.tags : normalizeHelpArticleTags(article?.tags || '')).join(', '))}" placeholder="payments, onboarding, orders" /></label>
+      <label><input type="checkbox" name="featured" ${article?.featured ? 'checked' : ''} /> Featured article</label>
+      <label>Video URL<input name="videoUrl" value="${escapeHtml(article?.videoUrl || '')}" placeholder="https://..." /></label>
+      <label>Target roles<select name="targetRoles" multiple>
+        <option value="customer" ${((article?.targetRoles || []).includes('customer')) ? 'selected' : ''}>Customer</option>
+        <option value="restaurant" ${((article?.targetRoles || []).includes('restaurant')) ? 'selected' : ''}>Restaurant</option>
+        <option value="delivery" ${((article?.targetRoles || []).includes('delivery')) ? 'selected' : ''}>Delivery</option>
+      </select></label>
+      <label class="full">Description<textarea name="description" required>${escapeHtml(article?.description || '')}</textarea></label>
+      <div class="row-actions">
+        <button class="primary-btn" id="submitHelpArticle" type="button">${isEditing ? 'Save changes' : 'Save article'}</button>
+        <button class="ghost-btn" id="cancelHelpArticle" type="button">Cancel</button>
+      </div>
+    </form>
+  `);
+  document.getElementById('submitHelpArticle').addEventListener('click', async () => {
+    const form = document.getElementById('helpArticleForm');
+    const data = new FormData(form);
+    const targetRoles = Array.from(form.querySelector('select[name="targetRoles"]').selectedOptions).map((option) => option.value);
+    const payload = {
+      title: String(data.get('title') || '').trim(),
+      description: String(data.get('description') || '').trim(),
+      image: String(data.get('image') || '').trim(),
+      category: String(data.get('category') || '').trim(),
+      tags: normalizeHelpArticleTags(data.get('tags')),
+      featured: Boolean(form.querySelector('input[name="featured"]').checked),
+      videoUrl: String(data.get('videoUrl') || '').trim(),
+      targetRoles,
+      updatedAt: new Date().toISOString()
+    };
+    if (!payload.title || !payload.description) {
+      createToast('Please add a title and description before publishing the article.', 'warning');
+      return;
+    }
+    try {
+      if (isEditing && article?.id) {
+        await updateDocument('helpArticles', article.id, payload);
+        createToast('Help article updated.', 'success');
+      } else {
+        await addDocument('helpArticles', { ...payload, createdAt: new Date().toISOString() });
+        createToast('Help article published.', 'success');
+      }
+      closeModal();
+      renderHelpCenter();
+    } catch (error) {
+      createToast(error.message || 'Unable to save the article.', 'error');
+    }
+  });
+  document.getElementById('cancelHelpArticle').addEventListener('click', closeModal);
+}
+
 function renderLogs() {
   content.innerHTML = `
     <section class="card">
@@ -1979,6 +2327,7 @@ function openModal(title, body) {
 }
 
 function closeModal() {
+  clearAdminMessageSession();
   modalRoot.classList.remove('open');
   modalRoot.innerHTML = '';
   document.removeEventListener('keydown', handleAdminModalEscape);
@@ -2357,6 +2706,13 @@ function initializeFirebaseSync() {
   });
   subscribeCollection('supportRequests', (items) => {
     state.data.supportRequests = items.sort((first, second) => new Date(second.createdAt || 0) - new Date(first.createdAt || 0));
+    refreshDashboard();
+  });
+  subscribeCollection('helpArticles', (items) => {
+    state.data.helpArticles = items;
+    if (state.currentSection === 'help') {
+      renderHelpCenter();
+    }
     refreshDashboard();
   });
 }

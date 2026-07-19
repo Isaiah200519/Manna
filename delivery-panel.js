@@ -11,6 +11,7 @@ const state = {
     notifications: [],
     supportRequests: [],
     chatMessages: [],
+    helpArticles: [],
     selectedOrder: null,
     activeSection: 'dashboard',
     loading: false,
@@ -113,7 +114,7 @@ function bindEvents() {
         showSection('notifications');
         setMobileNavOpen(false);
     });
-    elements.supportButton?.addEventListener('click', toggleSupportModal);
+    elements.supportButton?.addEventListener('click', () => showSection('help'));
     if (elements.mobileNavToggle) {
         const openMobileMenu = (event) => {
             if (event) {
@@ -473,6 +474,7 @@ function setupRealtimeListeners(userId) {
         state.deliveryRequests = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
         renderRestaurants();
         renderDashboard();
+        renderPartnerRequests();
     }, (error) => {
         console.error('[MANNA] Delivery requests listener failed:', error);
     });
@@ -492,6 +494,13 @@ function setupRealtimeListeners(userId) {
     }, (error) => {
         console.error('[MANNA] Delivery notifications listener failed:', error);
     });
+
+    firestore.collection('helpArticles').where('targetRoles', 'array-contains', 'delivery').onSnapshot((snapshot) => {
+        state.helpArticles = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+        renderHelpArticles();
+    }, (error) => {
+        console.error('[MANNA] Delivery help articles listener failed:', error);
+    });
 }
 
 function cleanupListeners() {
@@ -510,6 +519,8 @@ function renderAll() {
     renderActiveDeliveries();
     renderHistory();
     renderRestaurants();
+    renderPartnerRequests();
+    renderHelpArticles();
     renderProfile();
     renderSettings();
     renderNotifications();
@@ -649,6 +660,54 @@ function renderHistory() {
     </div>`).join('') : '<div class="empty-state">Delivery history is empty.</div>';
 }
 
+function renderPartnerRequests() {
+    const list = document.getElementById('partnerRequestsList');
+    if (!list) return;
+    const pending = state.deliveryRequests.filter((request) => request.status === 'pending');
+    list.innerHTML = pending.length ? pending.map((request) => `
+      <div class="item-card">
+        <div class="panel-card-header"><strong>${request.restaurantName || 'Restaurant'}</strong><span class="badge">Pending</span></div>
+        <div class="muted">Your request to partner with this restaurant is awaiting review.</div>
+      </div>`).join('') : '<div class="empty-state">You have no active partner requests right now.</div>';
+}
+
+function renderHelpArticles() {
+    const container = document.getElementById('helpArticlesList');
+    if (!container) return;
+    const categoryFilter = String(document.getElementById('helpArticleCategoryFilter')?.value || '').trim().toLowerCase();
+    const tagFilter = String(document.getElementById('helpArticleTagFilter')?.value || '').trim().toLowerCase();
+    const filteredArticles = state.helpArticles.filter((article) => {
+        const matchesCategory = !categoryFilter || String(article.category || '').trim().toLowerCase() === categoryFilter;
+        const tags = Array.isArray(article.tags) ? article.tags : String(article.tags || '').split(',').map((tag) => tag.trim()).filter(Boolean);
+        const tagText = tags.join(' ').toLowerCase();
+        const matchesTag = !tagFilter || tagText.includes(tagFilter);
+        return matchesCategory && matchesTag;
+    });
+    const featuredArticles = filteredArticles.filter((article) => Boolean(article.featured));
+    const regularArticles = filteredArticles.filter((article) => !article.featured);
+    const renderArticleCard = (article) => `
+      <div class="help-card">
+        <img src="${article.image ? `images/help-video-images/${article.image}` : 'images/placeholders/wrap.jpg'}" alt="${article.title || 'Help guide'}" onerror="this.src='images/placeholders/wrap.jpg'" />
+        <div class="help-card__body">
+          <h4>${article.title || 'Help article'}</h4>
+          <p>${article.description || ''}</p>
+          <div class="action-row" style="flex-wrap: wrap; gap: 8px;">
+            ${article.featured ? '<span class="badge featured-badge">📌 Featured</span>' : ''}
+            ${article.category ? `<span class="badge">${article.category}</span>` : ''}
+            ${(Array.isArray(article.tags) ? article.tags : String(article.tags || '').split(',').map((tag) => tag.trim()).filter(Boolean)).map((tag) => `<span class="badge">${tag}</span>`).join('')}
+          </div>
+          <div class="action-row">
+            ${article.videoUrl ? `<a class="primary-btn" href="${article.videoUrl}" target="_blank" rel="noopener noreferrer">Watch Video</a>` : '<span class="badge">Video coming soon</span>'}
+          </div>
+        </div>
+      </div>`;
+    container.innerHTML = filteredArticles.length ? `
+      <div class="stack">
+        ${featuredArticles.length ? `<div class="help-featured-section"><div class="panel-card-header"><h4>Featured guides</h4></div>${featuredArticles.map(renderArticleCard).join('')}</div>` : ''}
+        ${regularArticles.length ? `<div class="help-featured-section"><div class="panel-card-header"><h4>More guides</h4></div>${regularArticles.map(renderArticleCard).join('')}</div>` : ''}
+      </div>` : '<div class="empty-state">No help articles match the current filters.</div>';
+}
+
 function renderRestaurants() {
     const approvedRestaurantIds = state.profile?.approvedRestaurants || [];
     const requestCards = state.deliveryRequests.length ? state.deliveryRequests.map((request) => {
@@ -760,15 +819,20 @@ function showSection(section) {
     setActiveNavigation(section);
     setMobileNavOpen(false);
     document.querySelectorAll('.section-panel').forEach((panel) => panel.classList.toggle('active', panel.id === `${section}Section`));
+    if (section === 'help') {
+        renderHelpSession();
+    }
     const titleMap = {
         dashboard: ['Dashboard', 'Pick up, deliver, and keep your route moving.', 'Delivery Console', 'Dashboard / Overview'],
         available: ['Available Orders', 'Orders ready for pickup from approved restaurants.', 'Available Orders', 'Dashboard / Orders'],
         active: ['Active Deliveries', 'Orders currently assigned to you.', 'Active Deliveries', 'Dashboard / Deliveries'],
         history: ['Delivery History', 'Completed deliveries and your route summary.', 'Delivery History', 'Dashboard / History'],
         restaurants: ['Restaurants', 'Request deliveries from restaurants you want to work with.', 'Restaurants', 'Dashboard / Restaurants'],
+        partners: ['Partner Requests', 'Track your pending delivery partnerships.', 'Partner Requests', 'Dashboard / Partners'],
         notifications: ['Notifications', 'Stay updated on your deliveries.', 'Notifications', 'Dashboard / Alerts'],
         profile: ['Profile', 'Update your profile and vehicle details.', 'Profile', 'Dashboard / Profile'],
-        settings: ['Settings', 'Manage availability and account options.', 'Settings', 'Dashboard / Preferences']
+        settings: ['Settings', 'Manage availability and account options.', 'Settings', 'Dashboard / Preferences'],
+        help: ['Help Center', 'Find guides and support resources for delivery partners.', 'Help Center', 'Dashboard / Help']
     };
     const [title, subtitle, heading, breadcrumb] = titleMap[section] || titleMap.dashboard;
     elements.pageTitle.textContent = title;

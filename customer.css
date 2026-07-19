@@ -423,20 +423,34 @@ textarea {
 
 @media (min-width: 768px) {
     .sidebar {
-        position: sticky;
+        position: fixed;
         top: 0;
+        left: 0;
+        bottom: 0;
         align-self: flex-start;
         height: 100vh;
         height: 100dvh;
         max-height: 100vh;
         max-height: 100dvh;
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+        box-sizing: border-box;
     }
 
     .nav-links {
         flex: 1 1 auto;
         min-height: 0;
         overflow-y: auto;
+        overflow-x: hidden;
         padding-right: 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .main-panel {
+        margin-left: 250px;
     }
 }
 
@@ -447,8 +461,15 @@ textarea {
 }
 
 .nav-links {
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: 6px;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 4px;
+    padding-bottom: 8px;
 }
 
 .nav-item {
