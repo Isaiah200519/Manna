@@ -219,7 +219,7 @@
                         <span>🔔</span>
                         <span id="customerNotificationBadgeCount" class="badge hidden">0</span>
                     </button>
-                    <button id="cartButton" class="primary-btn">Cart (<span id="cartCount">0</span>)</button>
+                    <button id="cartButton" class="primary-btn">Checkout (<span id="cartCount">0</span>)</button>
                 </div>
             </header>
 
@@ -325,21 +325,14 @@
                 </div>
             </section>
 
-            <section id="cartSection" class="section-panel">
-                <div class="panel-card">
-                    <div class="panel-card-header">
-                        <h3>Your Cart</h3>
-                        <button id="checkoutButton" class="primary-btn">Checkout</button>
-                    </div>
-                    <div id="cartContent" class="stack"></div>
-                </div>
-            </section>
-
             <section id="checkoutSection" class="section-panel">
                 <div class="panel-card">
                     <div class="panel-card-header">
                         <h3>Checkout</h3>
-                        <button id="placeOrderButton" class="primary-btn">Place Order</button>
+                        <div class="modal-actions">
+                            <button id="removeCheckoutHeaderButton" class="danger-btn" type="button">Remove</button>
+                            <button id="placeOrderButton" class="primary-btn">Place Order</button>
+                        </div>
                     </div>
                     <div id="checkoutContent" class="stack"></div>
                 </div>

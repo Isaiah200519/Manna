@@ -5,8 +5,12 @@ import { getQRCardHTML, initQRCode, bindQRDownloadHandlers } from './qr-utils.js
 import { resolveRestaurantPaymentDetails } from './checkout-utils.mjs';
 
 const addonOptions = [
-    { id: 'water', name: 'Water Bottle', price: 40 },
-    { id: 'soft-drink', name: 'Soft Drink', price: 50 }
+    { id: 'water', name: 'Water', price: 40, category: 'water', image: 'images/adds-on/bottle-water.png', badge: 'L$40' },
+    { id: 'coca-cola', name: 'Coca-Cola', price: 70, category: 'soft-drink', image: 'images/adds-on/softdrink.png', badge: 'L$70' },
+    { id: 'pepsi', name: 'Pepsi', price: 70, category: 'soft-drink', image: 'images/adds-on/softdrink.png', badge: 'L$70' },
+    { id: 'orange-soda', name: 'Orange Soda', price: 80, category: 'soft-drink', image: 'images/adds-on/softdrink.png', badge: 'L$80' },
+    { id: 'grape-soda', name: 'Grape Soda', price: 80, category: 'soft-drink', image: 'images/adds-on/softdrink.png', badge: 'L$80' },
+    { id: 'seven-up', name: '7Up', price: 75, category: 'soft-drink', image: 'images/adds-on/softdrink.png', badge: 'L$75' }
 ];
 
 const defaultLocation = { lat: 6.3113, lng: -10.8014 };
@@ -20,6 +24,7 @@ const state = {
     favorites: [],
     addresses: [],
     locations: [],
+    activeAddressId: '',
     categories: [],
     profileUnsubscribe: null,
     restaurantsUnsubscribe: null,
@@ -27,7 +32,7 @@ const state = {
     favoritesUnsubscribe: null,
     addressesUnsubscribe: null,
     locationsUnsubscribe: null,
-    cart: { restaurantId: '', restaurantName: '', items: [], addons: [], drink: null, paymentMethod: 'orange_money', paymentPhone: '', paymentDetails: '', contactPhone: '', notes: '', deliveryFee: 0, selectedLocationId: '', restaurantPaymentReceiver: '', restaurantAcceptedPaymentMethods: [] },
+    cart: { restaurantId: '', restaurantName: '', items: [], addons: [], drink: null, paymentMethod: 'orange_money', paymentPhone: '', paymentDetails: '', contactPhone: '', notes: '', deliveryFee: 0, selectedLocationId: '', selectedAddonId: '', restaurantPaymentReceiver: '', restaurantAcceptedPaymentMethods: [] },
     checkoutLocationSelection: null,
     activeSection: 'home',
     selectedRestaurant: null,
@@ -115,6 +120,7 @@ function normalizeCartState(cart = {}) {
         notes: cart.notes || '',
         deliveryFee: Number(cart.deliveryFee || state.deliveryFee || 60),
         selectedLocationId: cart.selectedLocationId || '',
+        selectedAddonId: cart.selectedAddonId || '',
         restaurantPaymentReceiver: cart.restaurantPaymentReceiver || '',
         restaurantAcceptedPaymentMethods: Array.isArray(cart.restaurantAcceptedPaymentMethods) ? cart.restaurantAcceptedPaymentMethods : []
     };
@@ -197,7 +203,7 @@ function bindEvents() {
         });
     }
     document.getElementById('mobileLogoutButton')?.addEventListener('click', handleLogout);
-    cartButton?.addEventListener('click', () => showSection('cart'));
+    cartButton?.addEventListener('click', () => showSection('checkout'));
     if (notificationsToggle) {
         notificationsToggle.addEventListener('click', () => {
             showSection('notifications');
@@ -526,18 +532,21 @@ function setupRealtimeListeners(userId) {
     });
     state.addressesUnsubscribe = firestore.collection('users').doc(userId).collection('addresses').onSnapshot((snapshot) => {
         state.addresses = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        const activeAddress = state.addresses.find((entry) => entry.isActive === true) || state.addresses[0] || null;
+        state.activeAddressId = activeAddress?.id || '';
+        state.cart.selectedLocationId = activeAddress?.id || '';
+        saveCartToStorage();
         renderProfileForm();
+        if (document.getElementById('checkoutContent')) {
+            renderCheckout();
+        }
     }, (error) => {
         console.error('[MANNA] Customer addresses listener failed:', error);
     });
     state.locationsUnsubscribe = firestore.collection('users').doc(userId).collection('customerLocations').orderBy('createdAt', 'desc').onSnapshot((snapshot) => {
         state.locations = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        if (!state.cart.selectedLocationId && state.locations.length) {
-            state.cart.selectedLocationId = state.locations[0].id;
-            saveCartToStorage();
-        }
         renderProfileForm();
-        if (document.getElementById('checkoutForm')) {
+        if (document.getElementById('checkoutContent')) {
             renderCheckout();
         }
     }, (error) => {
@@ -870,6 +879,88 @@ function renderFavorites() {
     document.querySelectorAll('[data-favorite-restaurant]').forEach((button) => button.addEventListener('click', () => toggleFavoriteRestaurant(button.dataset.favoriteRestaurant)));
 }
 
+// Keep the checkout flow tied to the single active delivery address saved for the customer.
+function getActiveAddress() {
+    return state.addresses.find((entry) => entry.isActive === true) || state.addresses[0] || null;
+}
+
+function getAddressSummary(address) {
+    if (!address) return '';
+    return [address.label || 'Address', address.street || '', address.city || '', address.deliveryDetails || address.details || ''].filter(Boolean).join(' • ');
+}
+
+async function setActiveAddress(addressId) {
+    if (!state.authUser?.uid || !addressId) return;
+    try {
+        const batch = firestore.batch();
+        state.addresses.forEach((address) => {
+            const ref = firestore.collection('users').doc(state.authUser.uid).collection('addresses').doc(address.id);
+            batch.update(ref, { isActive: address.id === addressId, updatedAt: new Date() });
+        });
+        await batch.commit();
+        createToast('Active delivery address updated.', 'success');
+    } catch (error) {
+        createToast(error.message || 'Unable to update your address.', 'error');
+    }
+}
+
+// Present a lightweight location form so new addresses can be stored and activated immediately.
+function openAddAddressModal() {
+    openModal('Add New Location', `
+      <form id="addAddressForm" class="stack">
+        <label>Label<input name="label" value="Home" required /></label>
+        <label>Street<input name="street" required /></label>
+        <label>City<input name="city" required /></label>
+        <label>Delivery details<textarea name="deliveryDetails"></textarea></label>
+        <label>Latitude (optional)<input name="latitude" type="number" step="any" /></label>
+        <label>Longitude (optional)<input name="longitude" type="number" step="any" /></label>
+      </form>
+    `);
+    const actions = document.getElementById('modalActions');
+    actions.innerHTML = '<button class="ghost-btn" id="cancelAddressModal">Cancel</button><button class="primary-btn" id="saveAddressModal">Save address</button>';
+    document.getElementById('cancelAddressModal')?.addEventListener('click', closeModal);
+    document.getElementById('saveAddressModal')?.addEventListener('click', async () => {
+        const form = document.getElementById('addAddressForm');
+        const formData = new FormData(form);
+        const label = String(formData.get('label') || '').trim();
+        const street = String(formData.get('street') || '').trim();
+        const city = String(formData.get('city') || '').trim();
+        const deliveryDetails = String(formData.get('deliveryDetails') || '').trim();
+        const latitude = formData.get('latitude') ? Number(formData.get('latitude')) : null;
+        const longitude = formData.get('longitude') ? Number(formData.get('longitude')) : null;
+        if (!label || !street || !city) {
+            createToast('Please provide a label, street, and city.', 'warning');
+            return;
+        }
+        try {
+            const batch = firestore.batch();
+            const newDocRef = firestore.collection('users').doc(state.authUser.uid).collection('addresses').doc();
+            batch.set(newDocRef, {
+                ownerId: state.authUser.uid,
+                label,
+                street,
+                city,
+                deliveryDetails,
+                coordinates: Number.isFinite(latitude) && Number.isFinite(longitude) ? { latitude, longitude } : null,
+                isActive: true,
+                createdAt: new Date(),
+                updatedAt: new Date()
+            });
+            state.addresses.forEach((address) => {
+                if (address.id) {
+                    const ref = firestore.collection('users').doc(state.authUser.uid).collection('addresses').doc(address.id);
+                    batch.update(ref, { isActive: false, updatedAt: new Date() });
+                }
+            });
+            await batch.commit();
+            closeModal();
+            createToast('New delivery address saved and activated.', 'success');
+        } catch (error) {
+            createToast(error.message || 'Unable to save the new address.', 'error');
+        }
+    });
+}
+
 function renderProfileForm() {
     const form = document.getElementById('profileForm');
     const profile = state.customerProfile || {};
@@ -883,7 +974,26 @@ function renderProfileForm() {
     initQRCode('customerQrContainer');
     bindQRDownloadHandlers();
     renderLocationPicker();
-    document.getElementById('addressList').innerHTML = state.addresses.length ? state.addresses.map((address) => `<div class="item-card"><strong>${address.label || 'Address'}</strong><div class="muted">${address.street || ''} • ${address.city || ''}</div></div>`).join('') : '<div class="empty-state">No saved addresses yet.</div>';
+    document.getElementById('addressList').innerHTML = `
+      <div class="action-row" style="margin-bottom: 8px;">
+        <button class="primary-btn" id="addAddressButton" type="button">Add New Location</button>
+      </div>
+      ${state.addresses.length ? state.addresses.map((address) => `
+        <div class="item-card ${address.isActive ? 'checkout-address-card active' : ''}">
+          <div class="panel-card-header">
+            <strong>${escapeHtml(address.label || 'Address')}</strong>
+            <span class="badge">${address.isActive ? 'Active' : 'Saved'}</span>
+          </div>
+          <div class="muted">${escapeHtml(getAddressSummary(address))}</div>
+          <div class="modal-actions">
+            <button class="ghost-btn" type="button" data-set-active-address="${address.id}" ${address.isActive ? 'disabled' : ''}>${address.isActive ? 'Active' : 'Set as active'}</button>
+          </div>
+        </div>`).join('') : '<div class="empty-state">No saved addresses yet.</div>'}
+    `;
+    document.getElementById('addAddressButton')?.addEventListener('click', openAddAddressModal);
+    document.querySelectorAll('[data-set-active-address]').forEach((button) => {
+        button.addEventListener('click', () => setActiveAddress(button.dataset.setActiveAddress));
+    });
 }
 
 function renderLocationPicker() {
@@ -1285,13 +1395,14 @@ function renderSettingsForm() {
 }
 
 function showSection(section) {
+    if (section === 'cart') {
+        section = 'checkout';
+    }
     state.activeSection = section;
     setActiveNavigation(section);
     setMobileNavOpen(false);
     sectionPanels.forEach((panel) => panel.classList.toggle('active', panel.id === `${section}Section`));
-    if (section === 'cart') {
-        renderCart();
-    } else if (section === 'checkout') {
+    if (section === 'checkout') {
         renderCheckout();
     } else if (section === 'orders') {
         renderOrders();
@@ -1312,7 +1423,6 @@ function showSection(section) {
         favorites: ['Favorites', 'Your saved restaurants and food.'],
         profile: ['Profile', 'Manage your address and personal details.'],
         settings: ['Settings', 'Adjust your experience and preferences.'],
-        cart: ['Cart', 'Review items before checkout.'],
         checkout: ['Checkout', 'Complete your order with mobile money.']
     };
     const [title, subtitle] = titleMap[section] || titleMap.home;
@@ -1363,25 +1473,23 @@ async function addToCart(menuItemId) {
     if (!selectedItem) return;
     const button = document.querySelector(`[data-add-order="${menuItemId}"]`);
     const restaurantId = selectedItem.restaurantId || state.selectedRestaurant?.id || state.cart.restaurantId;
-    if (state.cart.restaurantId && state.cart.restaurantId !== restaurantId) {
-        const replace = window.confirm('Your cart contains items from another restaurant. Replace cart?');
-        if (!replace) return;
-    }
-    if (button) setButtonBusy(button, 'Adding…');
+    if (button) setButtonBusy(button, 'Preparing…');
     const restaurant = state.restaurants.find((entry) => entry.id === restaurantId);
     const paymentDetails = resolveRestaurantPaymentDetails(restaurant, state.cart);
-    state.cart.restaurantId = restaurantId;
-    state.cart.restaurantName = restaurant?.name || state.cart.restaurantName || 'Restaurant';
-    state.cart.restaurantPaymentReceiver = paymentDetails.restaurantPaymentReceiver;
-    state.cart.restaurantAcceptedPaymentMethods = paymentDetails.acceptedPaymentMethods;
-    const existingIndex = state.cart.items.findIndex((item) => item.menuItemId === menuItemId);
-    if (existingIndex >= 0) state.cart.items[existingIndex].quantity += 1;
-    else state.cart.items.push({ menuItemId, quantity: 1, variations: [], addons: [], notes: '' });
+    state.cart = normalizeCartState({
+        ...state.cart,
+        restaurantId,
+        restaurantName: restaurant?.name || state.cart.restaurantName || 'Restaurant',
+        restaurantPaymentReceiver: paymentDetails.restaurantPaymentReceiver,
+        restaurantAcceptedPaymentMethods: paymentDetails.acceptedPaymentMethods,
+        items: [{ menuItemId, quantity: 1, variations: [], addons: [], notes: '' }],
+        selectedAddonId: ''
+    });
     saveCartToStorage();
     updateCartSummary();
-    createToast(`${selectedItem.name} added to cart`, 'success');
-    showSection('cart');
-    renderCart();
+    createToast(`${selectedItem.name} is ready for checkout.`, 'success');
+    showSection('checkout');
+    renderCheckout();
 }
 
 function renderCart() {
@@ -1411,56 +1519,88 @@ function renderCart() {
     document.querySelectorAll('[data-cart-remove]').forEach((button) => button.addEventListener('click', () => removeCartItem(button.dataset.cartRemove)));
 }
 
+// Rebuild the checkout experience around a single selected product and its add-on choice.
 function renderCheckout() {
     state.cart = normalizeCartState(state.cart);
     const items = getCartItems();
-    const subtotal = items.reduce((sum, entry) => sum + (entry.menuItem?.price || 0) * entry.quantity, 0);
-    const addonTotal = state.cart.addons.reduce((sum, addonId) => sum + (addonOptions.find((option) => option.id === addonId)?.price || 0), 0);
+    const checkoutItem = items[0] || null;
+    const subtotal = checkoutItem ? (checkoutItem.menuItem?.price || 0) * checkoutItem.quantity : 0;
+    const selectedAddon = addonOptions.find((option) => option.id === state.cart.selectedAddonId) || null;
+    const addonTotal = selectedAddon ? selectedAddon.price : 0;
     const deliveryFee = Number(state.cart.deliveryFee || state.deliveryFee || 60);
     const total = subtotal + addonTotal + deliveryFee;
     const restaurant = state.restaurants.find((entry) => entry.id === state.cart.restaurantId);
     const paymentDetails = resolveRestaurantPaymentDetails(restaurant, state.cart);
     const paymentReceiverLabel = paymentDetails.restaurantPaymentReceiver || 'No payment receiver has been added yet for this restaurant.';
     const acceptedMethodsLabel = paymentDetails.acceptedPaymentMethods.length ? paymentDetails.acceptedPaymentMethods.map((method) => method.replace(/_/g, ' ')).join(', ') : 'Mobile money or cash';
-    const defaultAddress = state.addresses[0] ? `${state.addresses[0].street || ''}, ${state.addresses[0].city || ''}`.trim() : (state.customerProfile?.address || '');
-    const defaultSelectedLocationId = state.cart.selectedLocationId || state.locations[0]?.id || '';
-    const locationOptions = state.locations.length ? state.locations.map((location) => `<option value="${location.id}" ${defaultSelectedLocationId === location.id ? 'selected' : ''}>${escapeHtml(location.label || 'Location')}</option>`).join('') : '<option value="">No saved locations</option>';
+    const activeAddress = getActiveAddress();
+    const activeAddressLine = getAddressSummary(activeAddress) || state.customerProfile?.address || 'No active address';
+    const coordinates = activeAddress?.coordinates?.latitude != null && activeAddress?.coordinates?.longitude != null ? `${activeAddress.coordinates.latitude}, ${activeAddress.coordinates.longitude}` : '';
     const selectedPaymentMethod = state.cart.paymentMethod || 'orange_money';
     document.getElementById('checkoutContent').innerHTML = `
     <div class="stack">
       <div class="item-card">
         <h4>Order summary</h4>
-        ${items.map((entry) => `<div class="muted" style="display:flex;align-items:center;gap:10px;margin:6px 0"><img src="${getImageUrl(entry.menuItem?.imageFilename || entry.menuItem?.image || '')}" alt="${entry.menuItem?.name || 'Item'}" style="width:48px;height:48px;border-radius:10px;object-fit:cover" onerror="this.src='./images/placeholder.png'" /><span>${entry.menuItem?.name || 'Item'} × ${entry.quantity}</span></div>`).join('')}
-        <div class="muted">${items.length ? items.map((entry) => `${entry.menuItem?.name || 'Item'} × ${entry.quantity}`).join(', ') : 'No items added yet.'}</div>
+        ${checkoutItem ? `
+          <div class="checkout-summary-row">
+            <img src="${getImageUrl(checkoutItem.menuItem?.imageFilename || checkoutItem.menuItem?.image || '')}" alt="${checkoutItem.menuItem?.name || 'Item'}" onerror="this.src='./images/placeholder.png'" />
+            <div>
+              <strong>${escapeHtml(checkoutItem.menuItem?.name || 'Item')}</strong>
+              <div class="muted">${escapeHtml(checkoutItem.menuItem?.restaurantDescription || 'Freshly prepared for delivery.')}</div>
+            </div>
+          </div>
+        ` : '<div class="empty-state">No item selected. Choose a dish from the home page to begin checkout.</div>'}
         <p><strong>Subtotal:</strong> ${formatCurrency(subtotal)}</p>
         <p><strong>Delivery fee:</strong> ${formatCurrency(deliveryFee)}</p>
-        <p><strong>Add-ons:</strong> ${addonTotal ? formatCurrency(addonTotal) : 'None'}</p>
+        <p><strong>Add-on:</strong> ${selectedAddon ? `${selectedAddon.name} (${formatCurrency(selectedAddon.price)})` : 'None'}</p>
         <p><strong>Total:</strong> ${formatCurrency(total)}</p>
         <div class="muted">Payment receiver: ${escapeHtml(paymentReceiverLabel)}</div>
         <div class="muted">Accepted methods: ${escapeHtml(acceptedMethodsLabel)}</div>
       </div>
+      <div class="item-card">
+        <div class="panel-card-header">
+          <h4>Delivery address</h4>
+          <button class="ghost-btn" data-section="profile" type="button">Manage in Profile</button>
+        </div>
+        <div class="checkout-address-card">
+          <div class="muted">Only your active saved address is displayed here.</div>
+          <input class="premium-input" type="text" value="${escapeHtml(activeAddressLine)}" readonly />
+          ${coordinates ? `<input class="premium-input" type="text" value="${escapeHtml(coordinates)}" readonly />` : ''}
+        </div>
+      </div>
+      <div class="item-card">
+        <h4>Add-ons</h4>
+        <div class="checkout-addon-grid">
+          <label class="checkout-addon-card ${!selectedAddon ? 'active' : ''}">
+            <input type="radio" name="checkoutAddon" value="" ${!selectedAddon ? 'checked' : ''} />
+            <img src="./images/adds-on/bottle-water.png" alt="No add-on" onerror="this.src='./images/placeholder.png'" />
+            <div class="checkout-addon-info">
+              <strong>No add-on</strong>
+              <span class="badge">Free</span>
+            </div>
+          </label>
+          ${addonOptions.map((option) => `
+            <label class="checkout-addon-card ${selectedAddon?.id === option.id ? 'active' : ''}">
+              <input type="radio" name="checkoutAddon" value="${option.id}" ${selectedAddon?.id === option.id ? 'checked' : ''} />
+              <img src="${option.image}" alt="${option.name}" onerror="this.src='./images/placeholder.png'" />
+              <div class="checkout-addon-info">
+                <strong>${escapeHtml(option.name)}</strong>
+                <span class="badge">${escapeHtml(option.badge)}</span>
+              </div>
+            </label>`).join('')}
+        </div>
+      </div>
       <form id="checkoutForm" class="stack">
         <div class="item-card">
-          <h4>Delivery details</h4>
-          <label>Saved location<select name="savedLocationId" id="savedLocationSelect">
-            <option value="">Use a custom address</option>
-            ${locationOptions}
-          </select></label>
-          <div class="item-card checkout-location-card">
-            <button class="primary-btn" id="autoChooseLocationButton" type="button">📍 Auto Choose My Current Location</button>
-            <div id="checkoutLocationPreview" class="muted" style="margin-top:8px;">${state.checkoutLocationSelection?.fullAddress || 'Tap the button to pick your live delivery spot.'}</div>
-            <div id="checkoutLocationMap" class="location-map" style="margin-top:10px;"></div>
-            <div id="checkoutLocationStatus" class="map-status">Finding your location…</div>
-            <button class="ghost-btn" id="confirmCheckoutLocationButton" type="button" style="margin-top:8px;" disabled>✔ Confirm Delivery Location</button>
+          <h4>Quantity</h4>
+          <div class="checkout-quantity-row">
+            <button class="ghost-btn" type="button" data-checkout-decrease>−</button>
+            <input class="premium-input" type="number" min="1" value="${checkoutItem?.quantity || 1}" data-checkout-quantity />
+            <button class="ghost-btn" type="button" data-checkout-increase>+</button>
+            <button class="danger-btn" type="button" id="removeCheckoutItemButton">Remove</button>
           </div>
-          <label>Delivery address<input id="deliveryAddressInput" name="deliveryAddress" value="${defaultAddress}" required /></label>
-          <label><input type="checkbox" name="saveCheckoutLocationToProfile" value="1" /> Save this delivery location to my profile</label>
           <label>Phone<input name="customerPhone" value="${state.customerProfile?.phone || ''}" required /></label>
           <label>Notes<textarea name="notes">${state.cart.notes || ''}</textarea></label>
-        </div>
-        <div class="item-card">
-          <h4>Add-ons</h4>
-          ${addonOptions.map((option) => `<label><input type="checkbox" name="checkoutAddon" value="${option.id}" ${state.cart.addons.includes(option.id) ? 'checked' : ''} /> ${option.name} (${formatCurrency(option.price)})</label>`).join('')}
         </div>
         <div class="item-card">
           <h4>Payment</h4>
@@ -1490,6 +1630,21 @@ function renderCheckout() {
         </div>
       </form>
     </div>`;
+    document.querySelectorAll('input[name="checkoutAddon"]').forEach((input) => {
+        input.addEventListener('change', (event) => {
+            state.cart.selectedAddonId = event.target.value;
+            saveCartToStorage();
+            renderCheckout();
+        });
+    });
+    document.querySelector('[data-checkout-decrease]')?.addEventListener('click', () => updateCheckoutQuantity(-1));
+    document.querySelector('[data-checkout-increase]')?.addEventListener('click', () => updateCheckoutQuantity(1));
+    document.querySelector('[data-checkout-quantity]')?.addEventListener('change', (event) => {
+        const nextQuantity = Number.parseInt(event.target.value, 10);
+        updateCheckoutQuantity(Number.isNaN(nextQuantity) ? 1 : nextQuantity, false);
+    });
+    document.getElementById('removeCheckoutItemButton')?.addEventListener('click', removeCheckoutItem);
+    document.getElementById('removeCheckoutHeaderButton')?.addEventListener('click', removeCheckoutItem);
     document.querySelectorAll('.payment-method-option input[name="paymentMethod"]').forEach((radio) => {
         radio.addEventListener('change', () => {
             state.cart.paymentMethod = radio.value;
@@ -1499,26 +1654,6 @@ function renderCheckout() {
             });
         });
     });
-    document.getElementById('savedLocationSelect')?.addEventListener('change', (event) => {
-        const selectedLocation = state.locations.find((location) => location.id === event.target.value);
-        if (!selectedLocation) {
-            state.cart.selectedLocationId = '';
-            saveCartToStorage();
-            return;
-        }
-        const addressValue = [selectedLocation.landmark, selectedLocation.neighborhood, selectedLocation.details].filter(Boolean).join(' • ');
-        const addressInput = document.getElementById('deliveryAddressInput');
-        if (addressInput) {
-            addressInput.value = addressValue || selectedLocation.label || '';
-        }
-        state.cart.selectedLocationId = selectedLocation.id;
-        saveCartToStorage();
-    });
-    document.getElementById('autoChooseLocationButton')?.addEventListener('click', handleCheckoutLocationSelection);
-    document.getElementById('confirmCheckoutLocationButton')?.addEventListener('click', confirmCheckoutLocationSelection);
-    if (document.getElementById('checkoutLocationMap')) {
-        initLocationPickerMap('checkoutLocationMap', 'checkoutLocationStatus');
-    }
 }
 
 function setCartQuantity(menuItemId, quantity) {
@@ -1533,6 +1668,20 @@ function setCartQuantity(menuItemId, quantity) {
     saveCartToStorage();
     updateCartSummary();
     renderCart();
+}
+
+function updateCheckoutQuantity(delta, relative = true) {
+    if (!state.cart.items.length) {
+        return;
+    }
+    const item = state.cart.items[0];
+    const resolvedQuantity = relative
+        ? Math.max(1, (item.quantity || 1) + delta)
+        : Math.max(1, Number(delta || 1));
+    item.quantity = resolvedQuantity;
+    saveCartToStorage();
+    updateCartSummary();
+    renderCheckout();
 }
 
 function adjustCartQuantity(menuItemId, delta) {
@@ -1660,8 +1809,18 @@ function removeCartItem(menuItemId) {
     renderCart();
 }
 
+function removeCheckoutItem() {
+    state.cart.items = [];
+    state.cart.selectedAddonId = '';
+    saveCartToStorage();
+    updateCartSummary();
+    createToast('Item removed. Choose another dish to continue.', 'info');
+    showSection('home');
+}
+
 function isCustomerProfileComplete() {
-    return Boolean(state.customerProfile && state.customerProfile.displayName && state.customerProfile.phone && state.customerProfile.address);
+    const hasAddress = Boolean(state.customerProfile?.address || getActiveAddress());
+    return Boolean(state.customerProfile && state.customerProfile.displayName && state.customerProfile.phone && hasAddress);
 }
 
 function ensureCustomerProfileComplete() {
@@ -1677,29 +1836,29 @@ async function placeOrder() {
     const button = document.getElementById('placeOrderButton');
     setButtonBusy(button, 'Placing…');
     const formData = new FormData(checkoutForm);
-    const deliveryAddress = formData.get('deliveryAddress')?.toString().trim();
     const customerPhone = formData.get('customerPhone')?.toString().trim();
     const paymentMethod = formData.get('paymentMethod')?.toString() || 'orange_money';
     const paymentPhone = formData.get('paymentPhone')?.toString().trim();
     const paymentDetails = formData.get('paymentDetails')?.toString().trim();
     const notes = formData.get('notes')?.toString().trim();
-    const selectedLocationId = formData.get('savedLocationId')?.toString().trim() || state.cart.selectedLocationId || '';
-    const selectedLocation = state.locations.find((location) => location.id === selectedLocationId);
-    const selectedAddons = Array.from(formData.getAll('checkoutAddon')).map((value) => value.toString());
-    const shouldSaveLocationToProfile = formData.get('saveCheckoutLocationToProfile') === '1';
-    if (!deliveryAddress || !customerPhone || !paymentPhone || !paymentDetails) {
-        createToast('Please complete delivery and payment details.', 'error');
+    const selectedLocationId = state.cart.selectedLocationId || state.activeAddressId || '';
+    const selectedLocation = state.addresses.find((address) => address.id === selectedLocationId) || getActiveAddress() || null;
+    const selectedAddonId = formData.get('checkoutAddon')?.toString() || state.cart.selectedAddonId || '';
+    const selectedAddon = addonOptions.find((option) => option.id === selectedAddonId) || null;
+    const activeAddressLine = getAddressSummary(selectedLocation) || state.customerProfile?.address || '';
+    if (!activeAddressLine || !customerPhone || !paymentPhone || !paymentDetails) {
+        createToast('Please complete your delivery and payment details.', 'error');
         clearButtonBusy(button);
         return;
     }
     if (!state.cart.items.length) {
-        createToast('Your cart is empty.', 'error');
+        createToast('Your checkout is empty.', 'error');
         clearButtonBusy(button);
         return;
     }
     const items = getCartItems();
     const subtotal = items.reduce((sum, entry) => sum + (entry.menuItem?.price || 0) * entry.quantity, 0);
-    const addonTotal = selectedAddons.reduce((sum, addonId) => sum + (addonOptions.find((option) => option.id === addonId)?.price || 0), 0);
+    const addonTotal = selectedAddon ? selectedAddon.price : 0;
     const deliveryFee = Number(state.cart.deliveryFee || state.deliveryFee || 60);
     const total = subtotal + addonTotal + deliveryFee;
     const restaurant = state.restaurants.find((entry) => entry.id === state.cart.restaurantId);
@@ -1715,30 +1874,23 @@ async function placeOrder() {
         restaurantMobileMoney: restaurantPaymentDetails.restaurantMobileMoney,
         restaurantPaymentReceiver: restaurantPaymentDetails.restaurantPaymentReceiver,
         restaurantAcceptedPaymentMethods: restaurantPaymentDetails.acceptedPaymentMethods,
-        address: deliveryAddress,
+        address: activeAddressLine,
         deliveryLocationId: selectedLocation?.id || '',
         deliveryLocationLabel: selectedLocation?.label || '',
-        deliveryLat: selectedLocation?.lat || state.checkoutLocationSelection?.latitude || null,
-        deliveryLng: selectedLocation?.lng || state.checkoutLocationSelection?.longitude || null,
-        deliveryLandmark: selectedLocation?.landmark || state.checkoutLocationSelection?.landmark || '',
-        deliveryDetails: selectedLocation?.details || state.checkoutLocationSelection?.fullAddress || '',
-        deliveryLocationConfirmed: Boolean(state.checkoutLocationSelection?.locationConfirmed || selectedLocation),
-        deliveryCoordinates: state.checkoutLocationSelection ? {
-            latitude: state.checkoutLocationSelection.latitude,
-            longitude: state.checkoutLocationSelection.longitude,
-            accuracy: state.checkoutLocationSelection.accuracy,
-            address: state.checkoutLocationSelection.fullAddress || state.checkoutLocationSelection.address || '',
-            country: state.checkoutLocationSelection.country || '',
-            state: state.checkoutLocationSelection.state || '',
-            city: state.checkoutLocationSelection.city || '',
-            district: state.checkoutLocationSelection.district || '',
-            street: state.checkoutLocationSelection.street || '',
-            postalCode: state.checkoutLocationSelection.postalCode || '',
-            timestamp: state.checkoutLocationSelection.timestamp || new Date().toISOString(),
-            source: state.checkoutLocationSelection.source || 'manual'
+        deliveryLat: selectedLocation?.coordinates?.latitude || selectedLocation?.lat || null,
+        deliveryLng: selectedLocation?.coordinates?.longitude || selectedLocation?.lng || null,
+        deliveryLandmark: selectedLocation?.landmark || selectedLocation?.deliveryDetails || '',
+        deliveryDetails: selectedLocation?.deliveryDetails || selectedLocation?.details || '',
+        deliveryLocationConfirmed: Boolean(selectedLocation),
+        deliveryCoordinates: selectedLocation?.coordinates ? {
+            latitude: selectedLocation.coordinates.latitude,
+            longitude: selectedLocation.coordinates.longitude,
+            accuracy: selectedLocation.accuracy || null,
+            address: activeAddressLine,
+            source: 'saved'
         } : null,
         deliveryLocation: deliveryLocationPayload.address || deliveryLocationPayload.latitude || deliveryLocationPayload.longitude ? {
-            address: deliveryLocationPayload.address || deliveryAddress,
+            address: deliveryLocationPayload.address || activeAddressLine,
             latitude: deliveryLocationPayload.latitude,
             longitude: deliveryLocationPayload.longitude,
             accuracy: deliveryLocationPayload.accuracy,
@@ -1748,7 +1900,7 @@ async function placeOrder() {
             latitude: deliveryLocationPayload.latitude,
             longitude: deliveryLocationPayload.longitude,
             accuracy: deliveryLocationPayload.accuracy,
-            address: deliveryLocationPayload.address || deliveryAddress,
+            address: deliveryLocationPayload.address || activeAddressLine,
             source: deliveryLocationPayload.source || 'manual'
         } : null,
         status: 'pending',
@@ -1775,7 +1927,7 @@ async function placeOrder() {
                 price: entry.menuItem?.price || 0
             };
         }),
-        addons: selectedAddons.map((addonId) => addonOptions.find((option) => option.id === addonId) || { id: addonId, name: addonId, price: 0 }),
+        addons: selectedAddon ? [{ id: selectedAddon.id, name: selectedAddon.name, price: selectedAddon.price, image: selectedAddon.image }] : [],
         notes,
         estimatedDeliveryTime: new Date(Date.now() + etaMinutes * 60000),
         createdAt: new Date(),
@@ -1785,23 +1937,9 @@ async function placeOrder() {
         refundRequested: false
     };
     try {
-        const orderRef = await firestore.collection('orders').add(orderPayload);
-        if (shouldSaveLocationToProfile) {
-            const position = locationMarker?.getLatLng?.();
-            const locationPayload = {
-                ownerId: state.authUser.uid,
-                label: document.getElementById('locationLabel')?.value.trim() || 'Delivery',
-                landmark: document.getElementById('locationLandmark')?.value.trim() || '',
-                neighborhood: document.getElementById('locationNeighborhood')?.value.trim() || '',
-                details: document.getElementById('locationDetails')?.value.trim() || '',
-                lat: Number(position?.lat || deliveryLocationPayload.latitude || selectedLocation?.lat || 0),
-                lng: Number(position?.lng || deliveryLocationPayload.longitude || selectedLocation?.lng || 0),
-                createdAt: new Date()
-            };
-            await firestore.collection('users').doc(state.authUser.uid).collection('customerLocations').add(locationPayload);
-        }
-        await syncActiveOrderLocation(deliveryAddress, orderPayload.deliveryLocation);
-        state.cart = normalizeCartState({ restaurantId: '', restaurantName: '', items: [], addons: [], drink: null, paymentMethod: 'orange_money', paymentPhone: '', paymentDetails: '', contactPhone: '', notes: '', deliveryFee: state.deliveryFee, selectedLocationId: '', restaurantPaymentReceiver: '', restaurantAcceptedPaymentMethods: [] });
+        await firestore.collection('orders').add(orderPayload);
+        await syncActiveOrderLocation(activeAddressLine, orderPayload.deliveryLocation);
+        state.cart = normalizeCartState({ restaurantId: '', restaurantName: '', items: [], addons: [], drink: null, paymentMethod: 'orange_money', paymentPhone: '', paymentDetails: '', contactPhone: '', notes: '', deliveryFee: state.deliveryFee, selectedLocationId: '', selectedAddonId: '', restaurantPaymentReceiver: '', restaurantAcceptedPaymentMethods: [] });
         saveCartToStorage();
         updateCartSummary();
         showSection('orders');
@@ -1827,9 +1965,9 @@ function repeatOrder(orderId) {
     state.cart = normalizeCartState({ restaurantId: order.restaurantId, restaurantName: order.restaurantName, items: order.items.map((item) => ({ ...item, quantity: item.quantity || 1 })), addons: [], drink: null, paymentMethod: 'orange_money', paymentPhone: '', paymentDetails: '', contactPhone: '', notes: '', deliveryFee: state.deliveryFee, selectedLocationId: order.deliveryLocationId || '', restaurantPaymentReceiver: order.restaurantPaymentReceiver || order.restaurantMobileMoney || '', restaurantAcceptedPaymentMethods: Array.isArray(order.restaurantAcceptedPaymentMethods) ? order.restaurantAcceptedPaymentMethods : [] });
     saveCartToStorage();
     updateCartSummary();
-    createToast('Items added back to cart.', 'success');
-    showSection('cart');
-    renderCart();
+    createToast('Items prepared for checkout.', 'success');
+    showSection('checkout');
+    renderCheckout();
 }
 
 async function toggleFavoriteRestaurant(restaurantId) {

@@ -44,6 +44,14 @@
         margin: 0 auto;
     }
 
+    .sidebar {
+        display: none;
+    }
+
+    .main-panel {
+        margin-left: 0;
+    }
+
     #menuToggle,
     .icon-btn#menuToggle {
         display: none !important;
@@ -136,6 +144,89 @@ textarea:focus-visible {
 
 ::-webkit-scrollbar-thumb:hover {
     background: var(--border-color);
+}
+
+.checkout-addon-grid {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.checkout-addon-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    min-height: 140px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-main);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-main);
+    cursor: pointer;
+    transition: border-color var(--transition-fast), transform var(--transition-fast), background var(--transition-fast);
+}
+
+.checkout-addon-card.active {
+    border-color: var(--accent);
+    background: rgba(249, 115, 22, 0.14);
+    transform: translateY(-1px);
+}
+
+.checkout-addon-card input {
+    display: none;
+}
+
+.checkout-addon-card img {
+    width: 56px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: 12px;
+}
+
+.checkout-addon-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    text-align: center;
+}
+
+.checkout-summary-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 10px 0;
+}
+
+.checkout-summary-row img {
+    width: 56px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: 12px;
+}
+
+.checkout-address-card {
+    display: grid;
+    gap: 8px;
+}
+
+.checkout-quantity-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.checkout-quantity-row input {
+    width: 72px;
+    text-align: center;
+}
+
+.checkout-address-card.active {
+    border-color: var(--accent);
 }
 
 .hidden {
@@ -860,9 +951,29 @@ select {
     position: sticky;
     top: 0;
     height: 100vh;
-    overflow-y: auto;
+    height: 100dvh;
+    overflow: hidden;
     flex-shrink: 0;
     backdrop-filter: blur(18px);
+}
+
+@media (min-width: 768px) {
+    .sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        z-index: 1000;
+        height: 100vh;
+        height: 100dvh;
+        max-height: 100vh;
+        max-height: 100dvh;
+        border-radius: 0;
+    }
+
+    .main-panel {
+        margin-left: 250px;
+    }
 }
 
 .sidebar .sidebar-close {
@@ -952,6 +1063,7 @@ select {
     display: flex;
     flex-direction: column;
     gap: var(--space-lg);
+    overflow-x: hidden;
 }
 
 .mobile-bottom-nav {

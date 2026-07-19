@@ -25,3 +25,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+
+window.addEventListener('popstate', () => {
+    const currentPath = window.location.pathname.toLowerCase();
+    if (currentPath.includes('customer.html') || currentPath.includes('restaurant.html') || currentPath.includes('admin.html') || currentPath.includes('delivery.html')) {
+        window.scrollTo(0, 0);
+    }
+});

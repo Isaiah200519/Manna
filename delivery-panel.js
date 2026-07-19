@@ -1042,7 +1042,7 @@ async function openChat(orderId) {
         event.preventDefault();
         const text = document.getElementById('chatInput').value.trim();
         if (!text) return;
-        await firestore.collection('orders').doc(orderId).collection('messages').add({ text, senderRole: 'delivery_person', createdAt: new Date(), senderUid: state.authUser.uid });
+        await firestore.collection('orders').doc(orderId).collection('messages').add({ text, senderRole: 'delivery_person', senderUid: state.authUser.uid, read: false, isDeleted: false, createdAt: new Date(), updatedAt: new Date() });
         document.getElementById('chatInput').value = '';
     });
 }
@@ -1050,13 +1050,24 @@ async function openChat(orderId) {
 function loadChatMessages(orderId) {
     if (state.chatsUnsubscribe) state.chatsUnsubscribe();
     state.chatsUnsubscribe = firestore.collection('orders').doc(orderId).collection('messages').orderBy('createdAt', 'asc').onSnapshot((snapshot) => {
-        state.chatMessages = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        state.chatMessages = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).filter((message) => !message.isDeleted);
         document.getElementById('chatMessages').innerHTML = state.chatMessages.length ? state.chatMessages.map((message) => `
-      <div class="chat-bubble">
-        <strong>${message.senderRole === 'delivery_person' ? 'You' : message.senderRole}</strong>
+      <div class="chat-bubble ${message.senderRole === 'delivery_person' ? 'self' : ''}">
+        <div class="panel-card-header">
+          <strong>${message.senderRole === 'delivery_person' ? 'You' : message.senderRole === 'restaurant' ? 'Restaurant' : 'Customer'}</strong>
+          <span class="badge">${message.read ? 'Read' : 'Unread'}</span>
+        </div>
         <div>${message.text}</div>
         <div class="muted">${formatDate(message.createdAt)}</div>
+        <div class="action-row">
+          <button class="ghost-btn" type="button" data-delete-chat-message="${message.id}">Delete</button>
+        </div>
       </div>`).join('') : '<div class="empty-state">No messages yet.</div>';
+        document.querySelectorAll('[data-delete-chat-message]').forEach((button) => {
+            button.addEventListener('click', async () => {
+                await firestore.collection('orders').doc(orderId).collection('messages').doc(button.dataset.deleteChatMessage).set({ isDeleted: true, updatedAt: new Date() }, { merge: true });
+            });
+        });
     });
 }
 

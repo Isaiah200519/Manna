@@ -23,6 +23,9 @@ const state = {
     deliveryUsers: [],
     activeSection: 'dashboard',
     viewMode: 'grid',
+    activeOrderChatId: null,
+    orderChatMessages: [],
+    orderChatUnsubscribe: null,
     menuFilters: { search: '', category: 'all', availability: 'all', sort: 'name' },
     selectedMenuIds: new Set(),
     orderFilter: 'all',
@@ -601,7 +604,7 @@ async function handleAuthStateChange(user) {
 }
 
 function cleanupListeners() {
-    [state.restaurantDocUnsubscribe, state.deliveryUsersUnsubscribe, state.menuUnsubscribe, state.ordersUnsubscribe, state.reviewsUnsubscribe, state.promotionsUnsubscribe, state.couponsUnsubscribe, state.notificationsUnsubscribe, state.settingsUnsubscribe, state.chatsUnsubscribe, state.categoriesUnsubscribe].forEach((unsubscribe) => {
+    [state.restaurantDocUnsubscribe, state.deliveryUsersUnsubscribe, state.menuUnsubscribe, state.ordersUnsubscribe, state.reviewsUnsubscribe, state.promotionsUnsubscribe, state.couponsUnsubscribe, state.notificationsUnsubscribe, state.settingsUnsubscribe, state.chatsUnsubscribe, state.categoriesUnsubscribe, state.orderChatUnsubscribe].forEach((unsubscribe) => {
         if (unsubscribe) unsubscribe();
     });
     state.restaurantDocUnsubscribe = null;
@@ -615,6 +618,9 @@ function cleanupListeners() {
     state.settingsUnsubscribe = null;
     state.chatsUnsubscribe = null;
     state.categoriesUnsubscribe = null;
+    state.orderChatUnsubscribe = null;
+    state.activeOrderChatId = null;
+    state.orderChatMessages = [];
 }
 
 function setupRealtimeListeners() {
@@ -667,12 +673,18 @@ function setupRealtimeListeners() {
     }, (error) => {
         console.error('[MANNA] Restaurant coupons listener failed:', error);
     });
-    state.notificationsUnsubscribe = firestore.collection('restaurants').doc(state.restaurantId).collection('notifications').onSnapshot((snapshot) => {
-        state.notifications = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    const recipientUid = state.authUser?.uid;
+    if (recipientUid) {
+        state.notificationsUnsubscribe = firestore.collection('notifications').where('recipientUid', '==', recipientUid).orderBy('createdAt', 'desc').onSnapshot((snapshot) => {
+            state.notifications = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+            renderNotifications();
+        }, (error) => {
+            console.error('[MANNA] Restaurant notifications listener failed:', error);
+        });
+    } else {
+        state.notifications = [];
         renderNotifications();
-    }, (error) => {
-        console.error('[MANNA] Restaurant notifications listener failed:', error);
-    });
+    }
     firestore.collection('deliveryRequests').where('restaurantId', '==', state.restaurantId).onSnapshot((snapshot) => {
         state.deliveryRequests = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
         renderDeliveryRequests();
@@ -775,8 +787,12 @@ async function loadCoupons() {
 }
 
 async function loadNotifications() {
-    const snapshot = await firestore.collection('restaurants').doc(state.restaurantId).collection('notifications').orderBy('createdAt', 'desc').get();
-    state.notifications = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    if (!state.authUser?.uid) {
+        state.notifications = [];
+        return;
+    }
+    const snapshot = await firestore.collection('notifications').where('recipientUid', '==', state.authUser.uid).orderBy('createdAt', 'desc').get();
+    state.notifications = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 }
 
 async function loadDeliveryRequests() {
@@ -1037,11 +1053,15 @@ function renderOrders() {
         <button class="${readyButtonClass}" data-order-action="ready" data-order-id="${order.id}" ${readyDisabled ? 'disabled' : ''}>Ready</button>
         ${order.refundStatus === 'requested' ? `<button class="ghost-btn" data-order-action="approve-refund" data-order-id="${order.id}">Approve Refund</button><button class="ghost-btn" data-order-action="reject-refund" data-order-id="${order.id}">Reject Refund</button>` : ''}
         <button class="ghost-btn" data-order-action="details" data-order-id="${order.id}">Details</button>
+        <button class="ghost-btn" data-open-order-chat="${order.id}">Chat</button>
       </div>
     </div>`;
     }).join('') : '<div class="empty-state">No orders found.</div>';
     document.querySelectorAll('[data-order-action]').forEach((button) => {
         button.addEventListener('click', () => handleOrderAction(button.dataset.orderAction, button.dataset.orderId));
+    });
+    document.querySelectorAll('[data-open-order-chat]').forEach((button) => {
+        button.addEventListener('click', () => openOrderChat(button.dataset.openOrderChat));
     });
 }
 
@@ -1088,6 +1108,7 @@ function renderCoupons() {
 
 function renderNotifications() {
     const visible = state.notifications.filter((item) => !item.isDeleted);
+    updateNotificationBadge();
     document.getElementById('notificationBadge').textContent = `${visible.filter((item) => !item.read).length} unread`;
     document.getElementById('notificationsList').innerHTML = `
       <div class="action-row" style="margin-bottom: 12px;">
@@ -1483,6 +1504,12 @@ async function openMenuEditor(menuId) {
 }
 
 function closeModal() {
+    if (state.orderChatUnsubscribe) {
+        state.orderChatUnsubscribe();
+        state.orderChatUnsubscribe = null;
+    }
+    state.activeOrderChatId = null;
+    state.orderChatMessages = [];
     modalBackdrop.classList.add('hidden');
     modalBody.innerHTML = '';
     modalActions.innerHTML = '';
@@ -1604,6 +1631,11 @@ function openCouponModal() {
     document.getElementById('cancelCoupon').addEventListener('click', closeModal);
 }
 
+async function createNotification(recipientUid, title, message, type = 'system') {
+    if (!recipientUid) return;
+    await firestore.collection('notifications').add({ recipientUid, title, message, type, read: false, isDeleted: false, createdAt: new Date() });
+}
+
 async function notifyDeliveryPartnersForOrder(restaurantId, restaurantName, orderId) {
     if (!restaurantId) return;
     const restaurantDoc = await firestore.collection('restaurants').doc(restaurantId).get();
@@ -1669,12 +1701,91 @@ async function handleOrderAction(action, orderId) {
         return;
     }
     await orderRef.update({ status: nextStatus, updatedAt: new Date() });
+    if (currentOrder.customerUid) {
+        const customerNotifications = {
+            accept: { title: 'Order accepted', message: 'Your order was accepted and is being prepared.', type: 'order' },
+            reject: { title: 'Order cancelled', message: 'Your order was cancelled by the restaurant.', type: 'order' },
+            prepare: { title: 'Order in progress', message: 'Your order is now being prepared.', type: 'order' },
+            ready: { title: 'Order ready', message: 'Your order is ready for pickup.', type: 'order' }
+        };
+        const notification = customerNotifications[action];
+        if (notification) {
+            await createNotification(currentOrder.customerUid, notification.title, notification.message, notification.type);
+        }
+    }
     if (nextStatus === 'ready' && currentOrder.restaurantId) {
         await notifyDeliveryPartnersForOrder(currentOrder.restaurantId, currentOrder.restaurantName || state.restaurantProfile?.businessName || state.restaurantProfile?.name || 'your restaurant', orderId);
     }
     await loadOrders();
     renderOrders();
     createToast(`Order marked as ${nextStatus}`, 'success');
+}
+
+async function openOrderChat(orderId) {
+    const orderDoc = await firestore.collection('orders').doc(orderId).get();
+    const order = orderDoc.data() || {};
+    state.activeOrderChatId = orderId;
+    modalTitle.textContent = `Order chat #${order.orderNumber || orderId.slice(0, 6)}`;
+    modalBody.innerHTML = `
+    <div id="orderChatMessages" class="chat-log"></div>
+    <form id="orderChatForm" class="chat-form">
+      <input id="orderChatInput" type="text" placeholder="Send an update about this order" />
+      <button type="submit" class="primary-btn">Send</button>
+    </form>`;
+    modalActions.innerHTML = `<button class="ghost-btn" id="closeOrderChat">Close</button>`;
+    modalBackdrop.classList.remove('hidden');
+    modalBackdrop.setAttribute('aria-hidden', 'false');
+    document.getElementById('closeOrderChat').addEventListener('click', closeModal);
+    document.getElementById('orderChatForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const input = document.getElementById('orderChatInput');
+        const text = input?.value.trim();
+        if (!text) return;
+        await firestore.collection('orders').doc(orderId).collection('messages').add({
+            text,
+            senderRole: 'restaurant',
+            senderUid: state.authUser?.uid || '',
+            read: false,
+            isDeleted: false,
+            createdAt: new Date(),
+            updatedAt: new Date()
+        });
+        input.value = '';
+    });
+    loadOrderChatMessages(orderId);
+}
+
+function loadOrderChatMessages(orderId) {
+    if (state.orderChatUnsubscribe) {
+        state.orderChatUnsubscribe();
+        state.orderChatUnsubscribe = null;
+    }
+    state.orderChatUnsubscribe = firestore.collection('orders').doc(orderId).collection('messages').orderBy('createdAt', 'asc').onSnapshot((snapshot) => {
+        state.orderChatMessages = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).filter((message) => !message.isDeleted);
+        const container = document.getElementById('orderChatMessages');
+        if (!container) return;
+        container.innerHTML = state.orderChatMessages.length ? state.orderChatMessages.map((message) => `
+      <div class="chat-bubble ${message.senderRole === 'restaurant' ? 'self' : ''}">
+        <div class="panel-card-header">
+          <strong>${message.senderRole === 'restaurant' ? 'You' : message.senderRole === 'delivery_person' ? 'Delivery' : 'Customer'}</strong>
+          <span class="badge">${message.read ? 'Read' : 'Unread'}</span>
+        </div>
+        <div>${message.text}</div>
+        <div class="muted">${formatDate(message.createdAt)}</div>
+        <div class="action-row">
+          <button class="ghost-btn" type="button" data-delete-order-chat-message="${message.id}">Delete</button>
+        </div>
+      </div>`).join('') : '<div class="empty-state">No messages yet.</div>';
+        document.querySelectorAll('[data-delete-order-chat-message]').forEach((button) => {
+            button.addEventListener('click', async () => {
+                await deleteOrderChatMessage(orderId, button.dataset.deleteOrderChatMessage);
+            });
+        });
+    });
+}
+
+async function deleteOrderChatMessage(orderId, messageId) {
+    await firestore.collection('orders').doc(orderId).collection('messages').doc(messageId).set({ isDeleted: true, updatedAt: new Date() }, { merge: true });
 }
 
 function openOrderDetails(order) {
@@ -1723,13 +1834,13 @@ async function reportReview(reviewId) {
 }
 
 async function markNotificationRead(notificationId) {
-    await firestore.collection('restaurants').doc(state.restaurantId).collection('notifications').doc(notificationId).set({ read: true, updatedAt: new Date() }, { merge: true });
+    await firestore.collection('notifications').doc(notificationId).set({ read: true, updatedAt: new Date() }, { merge: true });
     await loadNotifications();
     renderNotifications();
 }
 
 async function deleteNotification(notificationId) {
-    await firestore.collection('restaurants').doc(state.restaurantId).collection('notifications').doc(notificationId).set({ read: true, isDeleted: true, updatedAt: new Date() }, { merge: true });
+    await firestore.collection('notifications').doc(notificationId).set({ read: true, isDeleted: true, updatedAt: new Date() }, { merge: true });
     await loadNotifications();
     renderNotifications();
 }
@@ -1737,7 +1848,7 @@ async function deleteNotification(notificationId) {
 async function clearAllNotifications() {
     const visible = state.notifications.filter((item) => !item.isDeleted);
     if (!visible.length) return;
-    await Promise.all(visible.map((item) => firestore.collection('restaurants').doc(state.restaurantId).collection('notifications').doc(item.id).set({ read: true, isDeleted: true, updatedAt: new Date() }, { merge: true })));
+    await Promise.all(visible.map((item) => firestore.collection('notifications').doc(item.id).set({ read: true, isDeleted: true, updatedAt: new Date() }, { merge: true })));
     await loadNotifications();
     renderNotifications();
     createToast('All notifications cleared.', 'success');
