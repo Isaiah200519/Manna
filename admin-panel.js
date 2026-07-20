@@ -1051,6 +1051,18 @@ function renderAddons() {
   });
 }
 
+function normalizeAddonCategory(category = '') {
+  const normalized = String(category || '').trim().toLowerCase();
+  const categoryMap = {
+    water: 'Water',
+    'non alcoholic drinks': 'Non Alcoholic drinks',
+    'non-alcoholic drinks': 'Non Alcoholic drinks',
+    'alcoholic drinks': 'Alcoholic drinks',
+    alcoholic: 'Alcoholic drinks'
+  };
+  return categoryMap[normalized] || String(category || '').trim() || 'Water';
+}
+
 function renderAddonCard(addon) {
   return `
     <article class="product-card">
@@ -1073,16 +1085,28 @@ function renderAddonCard(addon) {
 
 function openAddonModal(addonId = null) {
   const addon = state.data.addons.find((item) => item.id === addonId) || {};
+  const initialCategory = normalizeAddonCategory(addon.category);
+  const initialImage = String(addon.imageFilename || addon.image || '').trim();
+
   openModal('Add-On', `
     <form id="addonForm" class="form-grid" style="padding: 8px 0;">
       <label>Name<input name="name" value="${escapeHtml(addon.name || '')}" required /></label>
       <label>Price<input name="price" type="number" min="0" value="${addon.price ?? 0}" /></label>
-      <label>Category<input name="category" value="${escapeHtml(addon.category || '')}" placeholder="soft-drink" /></label>
+      <label>Category<select name="category">
+        <option value="Water" ${initialCategory === 'Water' ? 'selected' : ''}>Water</option>
+        <option value="Non Alcoholic drinks" ${initialCategory === 'Non Alcoholic drinks' ? 'selected' : ''}>Non Alcoholic drinks</option>
+        <option value="Alcoholic drinks" ${initialCategory === 'Alcoholic drinks' ? 'selected' : ''}>Alcoholic drinks</option>
+      </select></label>
       <label>Status<select name="status">
         <option value="active" ${addon.status === 'active' ? 'selected' : ''}>Active</option>
         <option value="inactive" ${addon.status === 'inactive' ? 'selected' : ''}>Inactive</option>
       </select></label>
-      <label>Image<input name="imageFilename" value="${escapeHtml(addon.imageFilename || addon.image || '')}" placeholder="bottle-water.png" /></label>
+      <label>Image<input id="addonImageInput" name="imageFilename" value="${escapeHtml(initialImage)}" placeholder="bottle-water.png" /></label>
+      <div id="addonImagePreviewWrapper" class="addon-image-preview-wrapper ${initialImage ? '' : 'hidden'}">
+        <div class="addon-image-preview-label">Preview</div>
+        <img id="addonImagePreview" class="addon-image-preview" src="${escapeHtml(getAddonImageUrl(initialImage))}" alt="Add-on preview" />
+        <div id="addonImageStatus" class="addon-image-preview-status">${initialImage ? 'Previewing the selected image' : 'No image selected'}</div>
+      </div>
       <label class="full">Description<textarea name="description">${escapeHtml(addon.description || '')}</textarea></label>
       <div class="modal-actions full">
         <button class="ghost-btn" type="button" id="cancelAddonModal">Cancel</button>
@@ -1090,13 +1114,43 @@ function openAddonModal(addonId = null) {
       </div>
     </form>
   `);
+
+  const imageInput = document.getElementById('addonImageInput');
+  const previewWrapper = document.getElementById('addonImagePreviewWrapper');
+  const previewImage = document.getElementById('addonImagePreview');
+  const previewStatus = document.getElementById('addonImageStatus');
+  const updatePreview = () => {
+    const imageValue = String(imageInput?.value || '').trim();
+    if (!imageValue) {
+      previewWrapper?.classList.add('hidden');
+      if (previewImage) previewImage.src = './images/placeholder.png';
+      if (previewStatus) previewStatus.textContent = 'No image selected';
+      return;
+    }
+    previewWrapper?.classList.remove('hidden');
+    if (previewImage) {
+      const resolvedUrl = getAddonImageUrl(imageValue);
+      previewImage.onerror = () => {
+        previewImage.src = './images/placeholder.png';
+        if (previewStatus) previewStatus.textContent = 'Image not found — using placeholder';
+      };
+      previewImage.onload = () => {
+        if (previewStatus) previewStatus.textContent = 'Previewing the selected image';
+      };
+      previewImage.src = resolvedUrl;
+      if (previewStatus) previewStatus.textContent = 'Loading image preview…';
+    }
+  };
+
+  imageInput?.addEventListener('input', updatePreview);
+  updatePreview();
   document.getElementById('addonForm').addEventListener('submit', async (event) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const payload = {
       name: String(formData.get('name') || '').trim(),
       price: Number(formData.get('price') || 0),
-      category: String(formData.get('category') || '').trim(),
+      category: normalizeAddonCategory(String(formData.get('category') || '').trim()),
       imageFilename: String(formData.get('imageFilename') || '').trim(),
       image: String(formData.get('imageFilename') || '').trim(),
       description: String(formData.get('description') || '').trim(),
@@ -2155,6 +2209,77 @@ window.clearAllNotifications = () => {
   updateNotificationBadge();
 };
 
+async function resetAppToFactoryState() {
+  if (!confirmDialog('This will permanently wipe orders, notifications, reports, support requests, help content, announcements, coupons, and other Firestore-backed app data, then restart the app as a fresh state. Continue?')) {
+    return;
+  }
+
+  try {
+    const { db } = initFirebase();
+    if (!db) {
+      createToast('Firebase is unavailable right now. The reset could not be completed.', 'error');
+      return;
+    }
+
+    createToast('Resetting app data and restarting…', 'info');
+
+    const collectionsToReset = ['orders', 'notifications', 'reports', 'supportRequests', 'helpArticles', 'announcements', 'coupons', 'masterAddons', 'masterProducts', 'restaurants', 'adminSessions'];
+    const preserveUserIds = [state.user?.uid].filter(Boolean);
+
+    for (const collectionName of collectionsToReset) {
+      const snapshot = await db.collection(collectionName).get();
+      await Promise.all(snapshot.docs.map((doc) => db.collection(collectionName).doc(doc.id).delete().catch(() => null)));
+    }
+
+    const usersSnapshot = await db.collection('users').get();
+    await Promise.all(usersSnapshot.docs
+      .filter((doc) => !preserveUserIds.includes(doc.id))
+      .map((doc) => db.collection('users').doc(doc.id).delete().catch(() => null)));
+
+    const localStorageKeys = [...Object.keys(localStorage), ...Object.keys(sessionStorage)].filter((key, index, array) => array.indexOf(key) === index);
+    localStorageKeys.filter((key) => key.startsWith('manna-') || key.startsWith('firebase:') || key === 'cart').forEach((key) => {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    });
+
+    state.data = {
+      products: [],
+      addons: [],
+      restaurants: [],
+      customers: [],
+      delivery: [],
+      orders: [],
+      reports: [],
+      coupons: [],
+      announcements: [],
+      notifications: [],
+      supportRequests: [],
+      settings: {},
+      logs: []
+    };
+    state.filters = {
+      products: { q: '', category: 'all', status: 'all', sort: 'date' },
+      addons: { q: '', category: 'all', status: 'all', sort: 'date' },
+      restaurants: { q: '', status: 'all' },
+      customers: { q: '', status: 'all' },
+      delivery: { q: '', status: 'all' },
+      analytics: { range: 'month', restaurantId: 'all' }
+    };
+    state.ui.selectedProducts = new Set();
+    state.ui.selectedAddons = new Set();
+
+    clearStoredAuthState();
+    window.setTimeout(() => {
+      window.location.reload();
+    }, 600);
+  } catch (error) {
+    console.error('[MANNA] App reset failed:', error);
+    createToast(error.message || 'The app reset could not be completed.', 'error');
+  }
+}
+
+window.resetAppToFactoryState = resetAppToFactoryState;
+
 function renderSettings() {
   const settings = state.data.settings || {};
   content.innerHTML = `
@@ -2174,7 +2299,10 @@ function renderSettings() {
         <label>Support Email<input id="supportEmail" value="${escapeHtml(settings.supportEmail || '')}" /></label>
         <label>Support Phone<input id="supportPhone" value="${escapeHtml(settings.supportPhone || '')}" /></label>
         <label>Maintenance Mode<select id="maintenanceMode"><option value="false" ${settings.maintenanceMode ? '' : 'selected'}>Off</option><option value="true" ${settings.maintenanceMode ? 'selected' : ''}>On</option></select></label>
-        <button class="primary-btn" id="saveSettings">Save Settings</button>
+        <div class="modal-actions full">
+          <button class="primary-btn" id="saveSettings">Save Settings</button>
+          <button class="ghost-btn" type="button" onclick="window.resetAppToFactoryState()">Reset app to fresh state</button>
+        </div>
       </div>
     </section>
   `;
