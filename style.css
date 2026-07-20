@@ -2303,12 +2303,18 @@ tr:last-child td {
     background: var(--bg-input);
 }
 
+.category-filter-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 8px;
+    margin-bottom: 20px;
+}
+
 .chip-row {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
-    margin-top: 8px;
-    margin-bottom: 20px;
     padding: 12px 14px;
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 16px;
@@ -2337,7 +2343,7 @@ tr:last-child td {
 }
 
 .mobile-category-list {
-    display: none;
+    display: flex;
     margin-top: 10px;
     margin-bottom: 0;
 }
@@ -2792,6 +2798,10 @@ tr:last-child td {
 
     .mobile-category-list {
         display: none;
+    }
+
+    .mobile-category-list.is-open {
+        display: flex;
     }
 
     .card-description {

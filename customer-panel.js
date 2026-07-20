@@ -725,7 +725,8 @@ function renderAll() {
 
 function renderHome() {
     const categoryButtons = state.categories.length ? state.categories.map((category) => `<button class="chip" data-category="${category}">${category}</button>`).join('') : '<div class="empty-state">No categories yet.</div>';
-    document.getElementById('homeCategories').innerHTML = `
+    const homeCategories = document.getElementById('homeCategories');
+    homeCategories.innerHTML = `
         <button class="mobile-category-toggle" type="button" aria-expanded="false" aria-controls="homeCategoryList">
             <span>Browse categories</span>
             <span class="mobile-category-toggle__icon">▾</span>
@@ -733,17 +734,23 @@ function renderHome() {
         <div id="homeCategoryList" class="chip-row mobile-category-list">${categoryButtons}</div>
     `;
 
-    const toggle = document.querySelector('.mobile-category-toggle');
-    const list = document.getElementById('homeCategoryList');
-    toggle?.addEventListener('click', () => {
+    const toggle = homeCategories.querySelector('.mobile-category-toggle');
+    const list = homeCategories.querySelector('#homeCategoryList');
+    toggle?.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
         const expanded = toggle.getAttribute('aria-expanded') === 'true';
         toggle.setAttribute('aria-expanded', String(!expanded));
-        list.classList.toggle('is-open', !expanded);
+        list?.classList.toggle('is-open', !expanded);
     });
 
-    document.querySelectorAll('[data-category]').forEach((button) => {
+    homeCategories.querySelectorAll('[data-category]').forEach((button) => {
         button.addEventListener('click', () => {
             state.filters.category = button.dataset.category;
+            if (window.innerWidth <= 767) {
+                toggle?.setAttribute('aria-expanded', 'false');
+                list?.classList.remove('is-open');
+            }
             showSection('restaurants');
         });
     });
