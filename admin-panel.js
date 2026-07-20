@@ -1,5 +1,5 @@
 import { initFirebase, isFirebaseReady, subscribeCollection, addDocument, updateDocument, deleteDocument, saveDocument, clearStoredAuthState } from './firebase-config.js';
-import { formatCurrency, formatDate, escapeHtml, getInitials, createToast, confirmDialog, getImageUrl, getRestaurantImageUrl, slugify } from './utils.js';
+import { formatCurrency, formatDate, escapeHtml, getInitials, createToast, confirmDialog, getImageUrl, getAddonImageUrl, getRestaurantImageUrl, slugify } from './utils.js';
 import { DEFAULT_CATEGORY_TAXONOMY, getCategoryDisplayName, getCategoryOptions } from './category-taxonomy.js';
 import { getQRCardHTML, initQRCode, bindQRDownloadHandlers } from './qr-utils.js';
 
@@ -9,6 +9,7 @@ const state = {
   user: { uid: '', displayName: 'Guest', role: 'guest' },
   data: {
     products: [],
+    addons: [],
     restaurants: [],
     customers: [],
     delivery: [],
@@ -23,6 +24,7 @@ const state = {
   },
   filters: {
     products: { q: '', category: 'all', status: 'all', sort: 'date' },
+    addons: { q: '', category: 'all', status: 'all', sort: 'date' },
     restaurants: { q: '', status: 'all' },
     customers: { q: '', status: 'all' },
     delivery: { q: '', status: 'all' },
@@ -31,6 +33,7 @@ const state = {
   adminMetrics: {},
   ui: {
     selectedProducts: new Set(),
+    selectedAddons: new Set(),
     modal: null,
     unsubscribe: [],
     chartPoints: [],
@@ -71,6 +74,11 @@ function seedData() {
     { id: 'p1', name: 'Liberian Fried Rice', category: 'Rice', description: 'Classic fried rice with vegetables', imageFilename: 'liberian fried rice.jpeg', status: 'active', createdAt: now, updatedAt: now, searchKeywords: ['fried rice', 'liberia', 'rice'], preparationCategory: 'Main', suggestedTags: ['popular', 'spicy'] },
     { id: 'p2', name: 'Cassava Leaf Soup', category: 'Soup', description: 'Traditional cassava leaf soup', imageFilename: 'cassava leaf soup.jpeg', status: 'active', createdAt: now, updatedAt: now, searchKeywords: ['cassava', 'soup'], preparationCategory: 'Soup', suggestedTags: ['traditional'] },
     { id: 'p3', name: 'Meat Pie', category: 'Snacks', description: 'Flaky pastry filled with spiced meat', imageFilename: 'meat pie.jpeg', status: 'inactive', createdAt: now, updatedAt: now, searchKeywords: ['pie', 'snack'], preparationCategory: 'Snack', suggestedTags: ['savory'] }
+  ];
+
+  state.data.addons = [
+    { id: 'a1', name: 'Bottle Water', category: 'water', description: 'Cold bottled water for dine-in and delivery.', imageFilename: 'bottle-water.png', price: 40, status: 'active', createdAt: now, updatedAt: now },
+    { id: 'a2', name: 'Soft Drink', category: 'soft-drink', description: 'Refreshing soft drink for any meal.', imageFilename: 'softdrink.png', price: 70, status: 'active', createdAt: now, updatedAt: now }
   ];
 
   state.data.restaurants = [
@@ -335,6 +343,7 @@ function attachEvents() {
     }
     const matches = [];
     matches.push(...state.data.products.filter((item) => [item.name, item.category, ...(item.searchKeywords || [])].join(' ').toLowerCase().includes(query)).map((item) => ({ label: `${item.name} • Product`, href: '#', type: 'product' })));
+    matches.push(...state.data.addons.filter((item) => [item.name, item.category, item.description].join(' ').toLowerCase().includes(query)).map((item) => ({ label: `${item.name} • Add-On`, href: '#', type: 'addon' })));
     matches.push(...state.data.restaurants.filter((item) => `${item.name} ${item.location}`.toLowerCase().includes(query)).map((item) => ({ label: `${item.name} • Restaurant`, href: '#', type: 'restaurant' })));
     matches.push(...state.data.customers.filter((item) => `${item.name} ${item.email}`.toLowerCase().includes(query)).map((item) => ({ label: `${item.name} • Customer`, href: '#', type: 'customer' })));
     matches.push(...state.data.orders.filter((item) => `${item.orderNumber} ${item.customerName}`.toLowerCase().includes(query)).map((item) => ({ label: `${item.orderNumber} • Order`, href: '#', type: 'order' })));
@@ -515,6 +524,7 @@ function openSection(section) {
   const titles = {
     dashboard: 'Dashboard',
     products: 'Master Products',
+    addons: 'Add-Ons',
     restaurants: 'Restaurants',
     customers: 'Customers',
     delivery: 'Delivery Persons',
@@ -540,6 +550,9 @@ function renderSection(section) {
       break;
     case 'products':
       renderProducts();
+      break;
+    case 'addons':
+      renderAddons();
       break;
     case 'restaurants':
       renderRestaurants();
@@ -967,6 +980,161 @@ function renderDashboard() {
   });
 
   updateNotificationBadge();
+}
+
+function renderAddons() {
+  const filtered = state.data.addons.filter((item) => !item.isDeleted).filter((item) => {
+    const query = state.filters.addons.q.toLowerCase();
+    const matchesQuery = !query || [item.name, item.category, item.description].join(' ').toLowerCase().includes(query);
+    const matchesCategory = state.filters.addons.category === 'all' || item.category === state.filters.addons.category;
+    const matchesStatus = state.filters.addons.status === 'all' || item.status === state.filters.addons.status;
+    return matchesQuery && matchesCategory && matchesStatus;
+  }).sort((first, second) => {
+    if (state.filters.addons.sort === 'name') return (first.name || '').localeCompare(second.name || '');
+    return new Date(second.updatedAt || second.createdAt || 0) - new Date(first.updatedAt || first.createdAt || 0);
+  });
+  const categories = [...new Set(state.data.addons.map((item) => item.category).filter(Boolean))];
+  content.innerHTML = renderPageLayout(
+    'Add-Ons',
+    'Create reusable add-ons once and attach them to menu items.',
+    `<button class="primary-btn" id="createAddonButton">Create Add-On</button>`,
+    `
+      <section class="card">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">Master add-on catalog</h3>
+            <p class="card-subtitle">Keep your add-on options consistent across restaurants and checkout.</p>
+          </div>
+        </div>
+        <div class="toolbar-grid">
+          <label>Search<input id="addonSearch" value="${escapeHtml(state.filters.addons.q)}" /></label>
+          <label>Category<select id="addonCategory">
+            <option value="all">All categories</option>
+            ${categories.map((category) => `<option value="${escapeHtml(category)}" ${state.filters.addons.category === category ? 'selected' : ''}>${escapeHtml(category)}</option>`).join('')}
+          </select></label>
+          <label>Status<select id="addonStatus">
+            <option value="all">All statuses</option>
+            <option value="active" ${state.filters.addons.status === 'active' ? 'selected' : ''}>Active</option>
+            <option value="inactive" ${state.filters.addons.status === 'inactive' ? 'selected' : ''}>Inactive</option>
+          </select></label>
+          <label>Sort<select id="addonSort">
+            <option value="date" ${state.filters.addons.sort === 'date' ? 'selected' : ''}>Date</option>
+            <option value="name" ${state.filters.addons.sort === 'name' ? 'selected' : ''}>Name</option>
+          </select></label>
+        </div>
+        ${filtered.length ? `<div class="product-grid">${filtered.map(renderAddonCard).join('')}</div>` : `<div class="empty-state">${state.data.addons.length ? 'No add-ons match your filters.' : 'No add-ons yet. Create one using the button above.'}</div>`}
+      </section>
+    `
+  );
+  document.getElementById('createAddonButton').addEventListener('click', () => openAddonModal());
+  document.querySelectorAll('[data-edit-addon]').forEach((button) => {
+    button.addEventListener('click', () => openAddonModal(button.dataset.editAddon));
+  });
+  document.querySelectorAll('[data-delete-addon]').forEach((button) => {
+    button.addEventListener('click', () => deleteAddon(button.dataset.deleteAddon));
+  });
+  document.getElementById('addonSearch').addEventListener('input', (event) => {
+    state.filters.addons.q = event.target.value;
+    renderAddons();
+  });
+  document.getElementById('addonCategory').addEventListener('change', (event) => {
+    state.filters.addons.category = event.target.value;
+    renderAddons();
+  });
+  document.getElementById('addonStatus').addEventListener('change', (event) => {
+    state.filters.addons.status = event.target.value;
+    renderAddons();
+  });
+  document.getElementById('addonSort').addEventListener('change', (event) => {
+    state.filters.addons.sort = event.target.value;
+    renderAddons();
+  });
+}
+
+function renderAddonCard(addon) {
+  return `
+    <article class="product-card">
+      <img src="${getAddonImageUrl(addon.imageFilename || addon.image || '')}" alt="${escapeHtml(addon.name || 'Add-on')}" onerror="this.src='./images/placeholder.png'" />
+      <div class="product-card__body">
+        <div class="panel-card-header">
+          <strong>${escapeHtml(addon.name || 'Untitled add-on')}</strong>
+          <span class="badge">${escapeHtml(addon.category || 'General')}</span>
+        </div>
+        <div class="muted">${escapeHtml(addon.description || 'Reusable add-on option for checkout.')}</div>
+        <div class="muted">Price: ${formatCurrency(addon.price || 0)}</div>
+        <div class="modal-actions">
+          <button class="ghost-btn" data-edit-addon="${addon.id}">Edit</button>
+          <button class="ghost-btn" data-delete-addon="${addon.id}">Delete</button>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function openAddonModal(addonId = null) {
+  const addon = state.data.addons.find((item) => item.id === addonId) || {};
+  openModal('Add-On', `
+    <form id="addonForm" class="form-grid" style="padding: 8px 0;">
+      <label>Name<input name="name" value="${escapeHtml(addon.name || '')}" required /></label>
+      <label>Price<input name="price" type="number" min="0" value="${addon.price ?? 0}" /></label>
+      <label>Category<input name="category" value="${escapeHtml(addon.category || '')}" placeholder="soft-drink" /></label>
+      <label>Status<select name="status">
+        <option value="active" ${addon.status === 'active' ? 'selected' : ''}>Active</option>
+        <option value="inactive" ${addon.status === 'inactive' ? 'selected' : ''}>Inactive</option>
+      </select></label>
+      <label>Image<input name="imageFilename" value="${escapeHtml(addon.imageFilename || addon.image || '')}" placeholder="bottle-water.png" /></label>
+      <label class="full">Description<textarea name="description">${escapeHtml(addon.description || '')}</textarea></label>
+      <div class="modal-actions full">
+        <button class="ghost-btn" type="button" id="cancelAddonModal">Cancel</button>
+        <button class="primary-btn" type="submit">Save add-on</button>
+      </div>
+    </form>
+  `);
+  document.getElementById('addonForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const payload = {
+      name: String(formData.get('name') || '').trim(),
+      price: Number(formData.get('price') || 0),
+      category: String(formData.get('category') || '').trim(),
+      imageFilename: String(formData.get('imageFilename') || '').trim(),
+      image: String(formData.get('imageFilename') || '').trim(),
+      description: String(formData.get('description') || '').trim(),
+      status: String(formData.get('status') || 'active'),
+      updatedAt: new Date().toISOString()
+    };
+    if (!payload.name) {
+      createToast('Please add an add-on name.', 'warning');
+      return;
+    }
+    const duplicate = state.data.addons.some((item) => item.id !== addonId && item.name?.toLowerCase() === payload.name.toLowerCase() && !item.isDeleted);
+    if (duplicate) {
+      createToast('An add-on with that name already exists.', 'warning');
+      return;
+    }
+    try {
+      if (addonId) {
+        await updateDocument('masterAddons', addonId, payload);
+      } else {
+        await saveDocument('masterAddons', { ...payload, createdAt: new Date().toISOString(), isDeleted: false });
+      }
+      closeModal();
+      createToast(addonId ? 'Add-on updated.' : 'Add-on created.', 'success');
+    } catch (error) {
+      createToast(error.message || 'Unable to save the add-on.', 'error');
+    }
+  });
+  document.getElementById('cancelAddonModal').addEventListener('click', closeModal);
+}
+
+async function deleteAddon(addonId) {
+  if (!confirmDialog('Delete this add-on from the master catalog?')) return;
+  try {
+    await updateDocument('masterAddons', addonId, { isDeleted: true, status: 'deleted', updatedAt: new Date().toISOString() });
+    createToast('Add-on removed from the catalog.', 'success');
+  } catch (error) {
+    createToast(error.message || 'Unable to delete the add-on.', 'error');
+  }
 }
 
 function renderProducts() {
@@ -2639,6 +2807,14 @@ function initializeFirebaseSync() {
     }
     refreshDashboard();
   });
+  subscribeCollection('masterAddons', (items) => {
+    console.log('[MANNA] Admin master add-ons snapshot received:', items);
+    state.data.addons = items;
+    if (state.currentSection === 'addons') {
+      renderAddons();
+    }
+    refreshDashboard();
+  });
   subscribeCollection('restaurants', (items) => {
     state.data.restaurants = items.map((restaurant) => normalizeRestaurantEntry(restaurant));
     refreshDashboard();
@@ -2726,7 +2902,7 @@ function init() {
   ensureAdminAccess();
   initializeFirebaseSync();
   const hashSection = window.location.hash.replace('#', '').replace(/^admin-/, '');
-  const initialSection = ['dashboard', 'products', 'restaurants', 'customers', 'delivery', 'orders', 'analytics', 'reports', 'coupons', 'announcements', 'notifications', 'settings', 'logs'].includes(hashSection) ? hashSection : 'dashboard';
+  const initialSection = ['dashboard', 'products', 'addons', 'restaurants', 'customers', 'delivery', 'orders', 'analytics', 'reports', 'coupons', 'announcements', 'notifications', 'settings', 'logs'].includes(hashSection) ? hashSection : 'dashboard';
   openSection(initialSection);
   console.info('[MANNA] Admin panel initialized and ready to authenticate with Firebase.');
 }

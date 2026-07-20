@@ -18,9 +18,9 @@ async function seedDatabase() {
     ];
 
     const restaurants = [
-        { id: 'rest-pizza', name: 'Pizza Palace', location: 'Sinkor', phone: '0770000001', mobileMoneyNumber: '0770000001', logo: 'pizza_palace.png', rating: 4.8, deliveryPersons: [], category: 'Pizza & Italian', isActive: true, ownerUid: 'restaurant-seed' },
-        { id: 'rest-burger', name: 'Burger King', location: 'Gardnersville', phone: '0770000002', mobileMoneyNumber: '0770000002', logo: 'burger_king.png', rating: 4.6, deliveryPersons: [], category: 'Burgers & Sandwiches', isActive: true, ownerUid: 'restaurant-seed-2' },
-        { id: 'rest-dominos', name: 'Dominos', location: 'Broad Street', phone: '0770000003', mobileMoneyNumber: '0770000003', logo: 'dominos.png', rating: 4.7, deliveryPersons: [], category: 'Pizza & Italian', isActive: true, ownerUid: 'restaurant-seed-3' }
+        { id: 'rest-pizza', name: 'Pizza Palace', location: 'Sinkor', phone: '0770000001', mobileMoneyNumber: '0770000001', logo: 'pizza_palace.png', rating: 4.8, deliveryPersons: [], category: 'Pizza & Italian', isActive: true, ownerUid: 'restaurant-seed', geopoint: { latitude: 6.3000, longitude: -10.8000 } },
+        { id: 'rest-burger', name: 'Burger King', location: 'Gardnersville', phone: '0770000002', mobileMoneyNumber: '0770000002', logo: 'burger_king.png', rating: 4.6, deliveryPersons: [], category: 'Burgers & Sandwiches', isActive: true, ownerUid: 'restaurant-seed-2', geopoint: { latitude: 6.3150, longitude: -10.7600 } },
+        { id: 'rest-dominos', name: 'Dominos', location: 'Broad Street', phone: '0770000003', mobileMoneyNumber: '0770000003', logo: 'dominos.png', rating: 4.7, deliveryPersons: [], category: 'Pizza & Italian', isActive: true, ownerUid: 'restaurant-seed-3', geopoint: { latitude: 6.2900, longitude: -10.7800 } }
     ];
 
     products.forEach((product) => {
@@ -28,7 +28,11 @@ async function seedDatabase() {
     });
 
     restaurants.forEach((restaurant) => {
-        batch.set(db.collection('restaurants').doc(restaurant.id), { ...restaurant, createdAt: new Date(), updatedAt: new Date() });
+        const restaurantPayload = { ...restaurant, createdAt: new Date(), updatedAt: new Date() };
+        if (restaurantPayload.geopoint && typeof window !== 'undefined' && window.firebase?.firestore?.GeoPoint) {
+            restaurantPayload.geopoint = new window.firebase.firestore.GeoPoint(restaurantPayload.geopoint.latitude, restaurantPayload.geopoint.longitude);
+        }
+        batch.set(db.collection('restaurants').doc(restaurant.id), restaurantPayload);
     });
 
     batch.set(db.collection('users').doc('admin-seed'), { uid: 'admin-seed', role: 'admin', displayName: 'Demo Admin', email: 'admin@manna.test', createdAt: new Date(), updatedAt: new Date() });

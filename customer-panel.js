@@ -1,17 +1,8 @@
 import { initFirebase, clearStoredAuthState } from './firebase-config.js';
-import { formatCurrency, formatDate, createToast, getImageUrl, getRestaurantImageUrl } from './utils.js';
+import { formatCurrency, formatDate, createToast, getImageUrl, getAddonImageUrl, getRestaurantImageUrl, calculateDistance } from './utils.js';
 import { DEFAULT_CATEGORY_TAXONOMY, getCategoryDisplayName, getCategoryOptions } from './category-taxonomy.js';
 import { getQRCardHTML, initQRCode, bindQRDownloadHandlers } from './qr-utils.js';
 import { resolveRestaurantPaymentDetails } from './checkout-utils.mjs';
-
-const addonOptions = [
-    { id: 'water', name: 'Water', price: 40, category: 'water', image: 'images/adds-on/bottle-water.png', badge: 'L$40' },
-    { id: 'coca-cola', name: 'Coca-Cola', price: 70, category: 'soft-drink', image: 'images/adds-on/softdrink.png', badge: 'L$70' },
-    { id: 'pepsi', name: 'Pepsi', price: 70, category: 'soft-drink', image: 'images/adds-on/softdrink.png', badge: 'L$70' },
-    { id: 'orange-soda', name: 'Orange Soda', price: 80, category: 'soft-drink', image: 'images/adds-on/softdrink.png', badge: 'L$80' },
-    { id: 'grape-soda', name: 'Grape Soda', price: 80, category: 'soft-drink', image: 'images/adds-on/softdrink.png', badge: 'L$80' },
-    { id: 'seven-up', name: '7Up', price: 75, category: 'soft-drink', image: 'images/adds-on/softdrink.png', badge: 'L$75' }
-];
 
 const defaultLocation = { lat: 6.3113, lng: -10.8014 };
 
@@ -20,6 +11,7 @@ const state = {
     customerProfile: null,
     restaurants: [],
     menuItems: [],
+    addons: [],
     orders: [],
     favorites: [],
     addresses: [],
@@ -141,6 +133,55 @@ function getFavoriteButtonClass(isActive) {
 
 function getFavoriteIcon(isActive) {
     return isActive ? '♥' : '♡';
+}
+
+function normalizeGeoPoint(value) {
+    if (!value) return null;
+    if (typeof value.toJSON === 'function' && value.latitude != null && value.longitude != null) {
+        return { latitude: Number(value.latitude), longitude: Number(value.longitude) };
+    }
+    if (value.latitude != null && value.longitude != null) {
+        return { latitude: Number(value.latitude), longitude: Number(value.longitude) };
+    }
+    if (value._lat != null && value._long != null) {
+        return { latitude: Number(value._lat), longitude: Number(value._long) };
+    }
+    if (value.lat != null && value.lng != null) {
+        return { latitude: Number(value.lat), longitude: Number(value.lng) };
+    }
+    return null;
+}
+
+function getCustomerLocationCoordinates(profile = state.customerProfile) {
+    const geopoint = profile?.geopoint || profile?.deliveryLocation?.geopoint || profile?.deliveryAddress?.geopoint;
+    const normalizedGeopoint = normalizeGeoPoint(geopoint);
+    if (normalizedGeopoint) {
+        return normalizedGeopoint;
+    }
+    const activeLocation = state.locations.find((entry) => entry.isActive === true) || state.locations[0] || null;
+    if (activeLocation?.lat != null && activeLocation?.lng != null) {
+        return { latitude: Number(activeLocation.lat), longitude: Number(activeLocation.lng) };
+    }
+    return null;
+}
+
+function hasLocationChanged(previousProfile = null, nextProfile = null) {
+    return JSON.stringify(getCustomerLocationCoordinates(previousProfile)) !== JSON.stringify(getCustomerLocationCoordinates(nextProfile));
+}
+
+function formatDistanceLabel(distance) {
+    if (distance === null || distance === undefined || Number.isNaN(distance)) return '';
+    if (distance < 1) return '< 1 km away';
+    return `${distance.toFixed(distance >= 10 ? 0 : 1)} km away`;
+}
+
+function sortMenuItemsForCustomer(menuItems, customerLocation = null) {
+    return [...menuItems].sort((a, b) => {
+        if (customerLocation) {
+            return (a.distance ?? Infinity) - (b.distance ?? Infinity);
+        }
+        return Number(b.createdAt?.seconds || b.createdAt || 0) - Number(a.createdAt?.seconds || a.createdAt || 0);
+    });
 }
 
 function resolvePasswordResetEmail(fallbackEmail = '') {
@@ -488,28 +529,35 @@ function cleanupListeners() {
     state.locationsUnsubscribe = null;
 }
 
+async function refreshCustomerFeed() {
+    try {
+        await loadVisibleProducts();
+        renderHome();
+        renderRestaurants();
+        if (state.activeSection === 'home' || state.activeSection === 'restaurants') {
+            showSection(state.activeSection || 'home');
+        }
+    } catch (error) {
+        console.error('[MANNA] Visible products load failed:', error);
+    }
+}
+
 function setupRealtimeListeners(userId) {
     cleanupListeners();
     state.profileUnsubscribe = firestore.collection('users').doc(userId).onSnapshot((doc) => {
+        const previousProfile = state.customerProfile || {};
         state.customerProfile = doc.data() || {};
         renderProfileForm();
         renderSettingsForm();
+        if (hasLocationChanged(previousProfile, state.customerProfile)) {
+            refreshCustomerFeed();
+        }
     }, (error) => {
         console.error('[MANNA] Customer profile listener failed:', error);
     });
     state.restaurantsUnsubscribe = firestore.collection('restaurants').where('status', '==', 'approved').where('isActive', '==', true).onSnapshot((snapshot) => {
         state.restaurants = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        loadVisibleProducts()
-            .then(() => {
-                renderHome();
-                renderRestaurants();
-                if (state.activeSection === 'home' || state.activeSection === 'restaurants') {
-                    showSection(state.activeSection || 'home');
-                }
-            })
-            .catch((error) => {
-                console.error('[MANNA] Visible products load failed:', error);
-            });
+        refreshCustomerFeed();
     }, (error) => {
         console.error('[MANNA] Restaurants listener failed:', error);
     });
@@ -558,6 +606,7 @@ function setupRealtimeListeners(userId) {
         if (document.getElementById('checkoutContent')) {
             renderCheckout();
         }
+        refreshCustomerFeed();
     }, (error) => {
         console.error('[MANNA] Customer locations listener failed:', error);
     });
@@ -566,6 +615,7 @@ function setupRealtimeListeners(userId) {
 async function loadCustomerData() {
     const userId = state.authUser.uid;
     await loadPlatformSettings();
+    await loadAddons();
     setupRealtimeListeners(userId);
     renderAll();
     hydrateCartFromStorage();
@@ -582,6 +632,16 @@ async function loadPlatformSettings() {
     }
 }
 
+async function loadAddons() {
+    try {
+        const snapshot = await firestore.collection('masterAddons').get();
+        state.addons = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).filter((addon) => addon.status === 'active' && !addon.isDeleted);
+    } catch (error) {
+        console.error('[MANNA] Failed to load add-ons:', error);
+        state.addons = [];
+    }
+}
+
 async function loadRestaurants() {
     const snapshot = await firestore.collection('restaurants').where('status', '==', 'approved').where('isActive', '==', true).get();
     state.restaurants = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
@@ -589,17 +649,56 @@ async function loadRestaurants() {
 }
 
 async function loadVisibleProducts() {
-    const restaurantDocs = await firestore.collection('restaurants').where('status', '==', 'approved').where('isActive', '==', true).get();
-    const restaurantIds = restaurantDocs.docs.map((doc) => doc.id);
+    const customerLocation = getCustomerLocationCoordinates();
+    let menuSnapshot = await firestore.collectionGroup('menu').where('isAvailable', '==', true).get();
+    if (!menuSnapshot.size) {
+        menuSnapshot = await firestore.collectionGroup('menu').where('availability', '==', true).get();
+    }
+    const allProducts = [];
 
-    const productSnapshots = await Promise.all(restaurantIds.map((restaurantId) => firestore.collection('restaurants').doc(restaurantId).collection('menu').where('availability', '==', true).get()));
-    const allProducts = productSnapshots.flatMap((snapshot, index) => snapshot.docs.map((doc) => ({
-        id: doc.id,
-        restaurantId: restaurantIds[index],
-        ...doc.data()
-    })));
+    for (const menuDoc of menuSnapshot.docs) {
+        const menuItem = menuDoc.data() || {};
+        const isAvailable = menuItem.isAvailable ?? menuItem.availability ?? false;
+        if (!isAvailable) continue;
 
-    state.menuItems = allProducts.filter((item) => item.availability !== false);
+        const restaurantRef = menuDoc.ref.parent?.parent;
+        const restaurantId = restaurantRef?.id || '';
+        let restaurantData = null;
+        let restaurantName = 'Restaurant';
+        let restaurantGeopoint = null;
+
+        if (restaurantId) {
+            const restaurantDoc = await firestore.collection('restaurants').doc(restaurantId).get();
+            restaurantData = restaurantDoc.data() || {};
+            if (restaurantData.status !== 'approved' || restaurantData.isActive === false) {
+                continue;
+            }
+            restaurantName = restaurantData.name || 'Restaurant';
+            restaurantGeopoint = normalizeGeoPoint(restaurantData.geopoint || restaurantData.location?.geopoint);
+        }
+
+        const distance = customerLocation && restaurantGeopoint
+            ? calculateDistance(customerLocation.latitude, customerLocation.longitude, restaurantGeopoint.latitude, restaurantGeopoint.longitude)
+            : null;
+
+        allProducts.push({
+            id: menuDoc.id,
+            restaurantId,
+            ...menuItem,
+            restaurantName,
+            distance,
+            isAvailable: true
+        });
+    }
+
+    state.menuItems = sortMenuItemsForCustomer(allProducts, customerLocation);
+    state.restaurants = state.restaurants.map((restaurant) => {
+        const restaurantGeopoint = normalizeGeoPoint(restaurant.geopoint || restaurant.location?.geopoint);
+        const distance = customerLocation && restaurantGeopoint
+            ? calculateDistance(customerLocation.latitude, customerLocation.longitude, restaurantGeopoint.latitude, restaurantGeopoint.longitude)
+            : null;
+        return { ...restaurant, distance };
+    });
     state.categories = [...new Set(state.menuItems.map((item) => getCategoryDisplayName(item.category)).filter(Boolean))];
 }
 
@@ -646,21 +745,33 @@ function renderHome() {
     });
 
     const featuredProducts = state.menuItems.filter((item) => item.availability !== false).slice(0, 8);
-    document.getElementById('homeContent').innerHTML = featuredProducts.length ? featuredProducts.map((item) => {
+    const customerLocation = getCustomerLocationCoordinates();
+    const locationNotice = customerLocation
+        ? '<div class="home-feed-note">Nearby restaurants are sorted first for faster delivery.</div>'
+        : '<div class="home-feed-note">Set your delivery address to see nearby restaurants first.</div>';
+
+    document.getElementById('homeContent').innerHTML = `${locationNotice}${featuredProducts.length ? featuredProducts.map((item) => {
         const restaurant = state.restaurants.find((entry) => entry.id === item.restaurantId);
         const isFavorite = isFavoriteMenuItem(item.id);
+        const distanceLabel = formatDistanceLabel(item.distance);
         return `
           <div class="item-card">
             <img src="${getImageUrl(item.imageFilename || item.image || '')}" alt="${item.name}" onerror="this.src='./images/placeholder.png'" />
-            <div class="panel-card-header"><strong>${item.name}</strong><span class="badge">${formatCurrency(item.price || 0)}</span></div>
+            <div class="panel-card-header">
+              <strong>${item.name}</strong>
+              <div class="product-card-meta">
+                <span class="badge">${formatCurrency(item.price || 0)}</span>
+                ${distanceLabel ? `<span class="distance-badge">📍 ${distanceLabel}</span>` : ''}
+              </div>
+            </div>
             <div class="muted">${item.restaurantDescription || item.description || 'Freshly prepared and ready for your order.'}</div>
-            <div class="muted">${restaurant?.name || 'Restaurant'}</div>
+            <div class="muted">${restaurant?.name || item.restaurantName || 'Restaurant'}</div>
             <div class="modal-actions">
               <button class="primary-btn" data-add-order="${item.id}">Add to cart</button>
               <button class="${getFavoriteButtonClass(isFavorite)}" data-favorite-item="${item.id}" aria-pressed="${isFavorite ? 'true' : 'false'}">${getFavoriteIcon(isFavorite)}</button>
             </div>
           </div>`;
-    }).join('') : '<div class="empty-state">No dishes are available right now.</div>';
+    }).join('') : '<div class="empty-state">No dishes are available right now.</div>'}`;
 
     document.querySelectorAll('[data-add-order]').forEach((button) => button.addEventListener('click', () => addToCart(button.dataset.addOrder)));
     document.querySelectorAll('[data-favorite-item]').forEach((button) => button.addEventListener('click', () => toggleFavoriteItem(button.dataset.favoriteItem)));
@@ -698,7 +809,6 @@ async function openRestaurant(restaurantId) {
     state.selectedRestaurant = restaurant;
     const menuSnapshot = await firestore.collection('restaurants').doc(restaurantId).collection('menu').where('availability', '==', true).get();
     const menuItems = menuSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    state.menuItems = menuItems;
     document.getElementById('restaurantDetailContent').innerHTML = `
     <div class="panel-card">
       <div class="panel-card-header">
@@ -1382,6 +1492,21 @@ async function saveCustomerLocation() {
             lng: Number(position.lng),
             createdAt: serverTimestamp
         });
+        const { GeoPoint } = window.firebase?.firestore || {};
+        if (GeoPoint) {
+            await firestore.collection('users').doc(state.authUser.uid).set({
+                geopoint: new GeoPoint(Number(position.lat), Number(position.lng)),
+                deliveryAddress: {
+                    label,
+                    landmark,
+                    neighborhood,
+                    details,
+                    latitude: Number(position.lat),
+                    longitude: Number(position.lng)
+                },
+                updatedAt: serverTimestamp
+            }, { merge: true });
+        }
         state.cart.selectedLocationId = savedRef.id;
         saveCartToStorage();
         createToast('Location saved successfully.', 'success');
@@ -1632,12 +1757,19 @@ function renderCart() {
 }
 
 // Rebuild the checkout experience around a single selected product and its add-on choice.
+function getAvailableAddonsForCurrentItem() {
+    const checkoutItem = getCartItems()[0] || null;
+    const addonIds = Array.isArray(checkoutItem?.menuItem?.addonIds) ? checkoutItem.menuItem.addonIds : [];
+    return state.addons.filter((addon) => addonIds.includes(addon.id));
+}
+
 function renderCheckout() {
     state.cart = normalizeCartState(state.cart);
     const items = getCartItems();
     const checkoutItem = items[0] || null;
     const subtotal = checkoutItem ? (checkoutItem.menuItem?.price || 0) * checkoutItem.quantity : 0;
-    const selectedAddon = addonOptions.find((option) => option.id === state.cart.selectedAddonId) || null;
+    const availableAddons = getAvailableAddonsForCurrentItem();
+    const selectedAddon = availableAddons.find((option) => option.id === state.cart.selectedAddonId) || null;
     const addonTotal = selectedAddon ? selectedAddon.price : 0;
     const deliveryFee = Number(state.cart.deliveryFee || state.deliveryFee || 60);
     const total = subtotal + addonTotal + deliveryFee;
@@ -1682,7 +1814,7 @@ function renderCheckout() {
       </div>
       <div class="item-card">
         <h4>Add-ons</h4>
-        <div class="checkout-addon-grid">
+        ${availableAddons.length ? `<div class="checkout-addon-grid">
           <label class="checkout-addon-card ${!selectedAddon ? 'active' : ''}">
             <input type="radio" name="checkoutAddon" value="" ${!selectedAddon ? 'checked' : ''} />
             <img src="./images/adds-on/bottle-water.png" alt="No add-on" onerror="this.src='./images/placeholder.png'" />
@@ -1691,16 +1823,16 @@ function renderCheckout() {
               <span class="badge">Free</span>
             </div>
           </label>
-          ${addonOptions.map((option) => `
+          ${availableAddons.map((option) => `
             <label class="checkout-addon-card ${selectedAddon?.id === option.id ? 'active' : ''}">
               <input type="radio" name="checkoutAddon" value="${option.id}" ${selectedAddon?.id === option.id ? 'checked' : ''} />
-              <img src="${option.image}" alt="${option.name}" onerror="this.src='./images/placeholder.png'" />
+              <img src="${getAddonImageUrl(option.imageFilename || option.image || '')}" alt="${escapeHtml(option.name)}" onerror="this.src='./images/placeholder.png'" />
               <div class="checkout-addon-info">
                 <strong>${escapeHtml(option.name)}</strong>
-                <span class="badge">${escapeHtml(option.badge)}</span>
+                <span class="badge">${formatCurrency(option.price || 0)}</span>
               </div>
             </label>`).join('')}
-        </div>
+        </div>` : '<div class="empty-state">This item has no optional add-ons configured.</div>'}
       </div>
       <form id="checkoutForm" class="stack">
         <div class="item-card">
@@ -1956,7 +2088,8 @@ async function placeOrder() {
     const selectedLocationId = state.cart.selectedLocationId || state.activeAddressId || '';
     const selectedLocation = state.addresses.find((address) => address.id === selectedLocationId) || getActiveAddress() || null;
     const selectedAddonId = formData.get('checkoutAddon')?.toString() || state.cart.selectedAddonId || '';
-    const selectedAddon = addonOptions.find((option) => option.id === selectedAddonId) || null;
+    const availableAddons = getAvailableAddonsForCurrentItem();
+    const selectedAddon = availableAddons.find((option) => option.id === selectedAddonId) || null;
     const activeAddressLine = getAddressSummary(selectedLocation) || state.customerProfile?.address || '';
     if (!activeAddressLine || !customerPhone || !paymentPhone || !paymentDetails) {
         createToast('Please complete your delivery and payment details.', 'error');

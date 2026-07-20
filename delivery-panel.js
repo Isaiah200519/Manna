@@ -14,6 +14,7 @@ const state = {
     helpArticles: [],
     selectedOrder: null,
     activeSection: 'dashboard',
+    pendingClaimOrderIds: new Set(),
     loading: false,
     profileUnsubscribe: null,
     restaurantsUnsubscribe: null,
@@ -538,7 +539,7 @@ function renderAllLists() {
 
 function renderDashboard() {
     const approvedRestaurantIds = state.profile?.approvedRestaurants || [];
-    const available = state.allOrders.filter((order) => !order.isDeleted && approvedRestaurantIds.includes(order.restaurantId) && order.status === 'accepted' && !order.deliveryPersonUid);
+    const available = state.allOrders.filter((order) => !order.isDeleted && approvedRestaurantIds.includes(order.restaurantId) && order.status === 'ready' && !order.deliveryPersonUid);
     const active = state.allOrders.filter((order) => !order.isDeleted && order.deliveryPersonUid === state.authUser?.uid && order.status === 'out_for_delivery');
     const history = state.allOrders.filter((order) => !order.isDeleted && order.deliveryPersonUid === state.authUser?.uid && ['delivered', 'received'].includes(order.status));
     const today = history.filter((order) => {
@@ -604,9 +605,9 @@ function renderDeliveryLocationMap(order) {
 
 function renderAvailableOrders() {
     const approvedRestaurantIds = state.profile?.approvedRestaurants || [];
-    const available = state.allOrders.filter((order) => !order.isDeleted && approvedRestaurantIds.includes(order.restaurantId) && ['accepted', 'preparing', 'ready'].includes(order.status) && !order.deliveryPersonUid);
+    const available = state.allOrders.filter((order) => !order.isDeleted && approvedRestaurantIds.includes(order.restaurantId) && order.status === 'ready' && !order.deliveryPersonUid);
     document.getElementById('availableOrdersList').innerHTML = available.length ? available.map((order) => {
-        const buttonLabel = order.status === 'ready' ? 'Start Delivery' : 'Pick Up';
+        const isClaiming = state.pendingClaimOrderIds.has(order.id);
         return `
     <div class="item-card">
       <img src="${getImagePath(order.items?.[0]?.imagePath || order.items?.[0]?.image || order.items?.[0]?.imageFilename || '', 'products')}" alt="${order.items?.[0]?.name || 'Order'}" />
@@ -618,7 +619,7 @@ function renderAvailableOrders() {
       </div>
       ${renderDeliveryLocationMap(order)}
       <div class="action-row">
-        <button class="primary-btn" data-action="pick-up-order" data-id="${order.id}">${buttonLabel}</button>
+        <button class="primary-btn" data-action="pick-up-order" data-id="${order.id}" ${isClaiming ? 'disabled' : ''}>${isClaiming ? 'Claiming...' : 'Pick Up'}</button>
         <button class="ghost-btn" data-action="open-chat" data-id="${order.id}">Chat</button>
       </div>
     </div>`;
@@ -841,6 +842,21 @@ function showSection(section) {
     if (elements.pageBreadcrumb) elements.pageBreadcrumb.textContent = breadcrumb;
 }
 
+function setClaimButtonState(orderId, isClaiming) {
+    if (!orderId) return;
+    document.querySelectorAll(`[data-action="pick-up-order"][data-id="${orderId}"]`).forEach((button) => {
+        button.disabled = isClaiming;
+        button.classList.toggle('is-busy', isClaiming);
+        if (isClaiming) {
+            button.dataset.originalText = button.textContent.trim();
+            button.textContent = 'Claiming...';
+        } else if (button.dataset.originalText) {
+            button.textContent = button.dataset.originalText;
+            delete button.dataset.originalText;
+        }
+    });
+}
+
 async function handleAction(action, id) {
     if (!state.authUser) return;
     switch (action) {
@@ -884,17 +900,45 @@ async function handleAction(action, id) {
 
 async function pickUpOrder(orderId) {
     if (!ensureDeliveryProfileComplete()) return;
+    if (!orderId || state.pendingClaimOrderIds.has(orderId)) return;
+
+    state.pendingClaimOrderIds.add(orderId);
+    setClaimButtonState(orderId, true);
+
+    const profile = state.profile || {};
+    const order = state.allOrders.find((entry) => entry.id === orderId);
+    let assignedSuccessfully = false;
+
     try {
-        const profile = state.profile || {};
-        const order = state.allOrders.find((entry) => entry.id === orderId);
-        await firestore.collection('orders').doc(orderId).update({
-            status: 'out_for_delivery',
-            deliveryPersonUid: state.authUser.uid,
-            deliveryPersonName: profile.displayName || profile.email || 'Delivery person',
-            deliveryPersonPhone: profile.phone || '',
-            deliveryPersonVehicleType: profile.vehicleType || '',
-            updatedAt: new Date()
+        const orderRef = firestore.collection('orders').doc(orderId);
+        const serverTimestamp = window.firebase?.firestore?.FieldValue?.serverTimestamp?.() || new Date();
+
+        await firestore.runTransaction(async (transaction) => {
+            const orderDoc = await transaction.get(orderRef);
+            if (!orderDoc.exists) {
+                throw new Error('This order no longer exists.');
+            }
+
+            const orderData = orderDoc.data() || {};
+            if (orderData.deliveryPersonUid) {
+                throw new Error('This order has already been claimed by another driver.');
+            }
+            if (!['accepted', 'preparing', 'ready'].includes(orderData.status)) {
+                throw new Error('This order is not available for pickup right now.');
+            }
+
+            transaction.update(orderRef, {
+                status: 'out_for_delivery',
+                deliveryPersonUid: state.authUser.uid,
+                deliveryPersonName: profile.displayName || profile.email || 'Delivery person',
+                deliveryPersonPhone: profile.phone || '',
+                deliveryPersonVehicleType: profile.vehicleType || '',
+                assignedAt: serverTimestamp,
+                updatedAt: new Date()
+            });
         });
+
+        assignedSuccessfully = true;
         await Promise.all([
             createNotification(state.authUser.uid, 'Order assigned', 'You picked up an order and it is now in transit.', 'delivery'),
             order?.customerUid ? createNotification(order.customerUid, 'Order on the way', 'Your order is now on the way with a delivery partner.', 'delivery') : Promise.resolve(),
@@ -907,7 +951,19 @@ async function pickUpOrder(orderId) {
         ]);
         createToast('Order picked up and assigned to you.', 'success');
     } catch (error) {
-        createToast(error.message, 'error');
+        const message = error.message || 'Unable to claim this order.';
+        if (message.includes('already been claimed')) {
+            createToast('Sorry, this order was just claimed by another driver.', 'warning');
+        } else if (message.includes('not available')) {
+            createToast('This order is no longer available for pickup.', 'warning');
+        } else {
+            createToast(message, 'error');
+        }
+    } finally {
+        state.pendingClaimOrderIds.delete(orderId);
+        if (!assignedSuccessfully) {
+            setClaimButtonState(orderId, false);
+        }
     }
 }
 

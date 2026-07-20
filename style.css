@@ -39,8 +39,29 @@
 
 /* keep the mobile header toggle visible so the sidebar can be opened on compact screens */
 @media (max-width: 767px) {
+
+    html,
     body {
-        width: 95%;
+        width: 100%;
+        max-width: 100%;
+        -ms-overflow-style: none;
+    }
+
+    html::-webkit-scrollbar,
+    body::-webkit-scrollbar {
+        display: none;
+    }
+
+    body {
+        width: 95vw;
+        max-width: 95vw;
+        margin: 0 auto;
+    }
+
+    .auth-screen,
+    .app-shell {
+        width: 100%;
+        max-width: 95vw;
         margin: 0 auto;
     }
 
@@ -377,12 +398,37 @@ textarea:focus-visible {
     min-width: 0;
 }
 
-.app-shell,
-.main-panel,
-.sidebar,
-.page-header,
-.topbar,
-.section-panel,
+.home-feed-note {
+    margin-bottom: var(--space-md);
+    padding: 10px 12px;
+    border: 1px solid rgba(249, 115, 22, 0.25);
+    border-radius: var(--radius-small);
+    background: rgba(249, 115, 22, 0.12);
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.product-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 6px;
+}
+
+.distance-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: var(--radius-pill);
+    background: rgba(59, 130, 246, 0.16);
+    color: #bfdbfe;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}
+
 .panel-card,
 .card-grid,
 .stats-grid,

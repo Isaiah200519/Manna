@@ -1,5 +1,5 @@
 import { initFirebase, clearStoredAuthState } from './firebase-config.js';
-import { formatCurrency, formatDate, createToast, getImageUrl } from './utils.js';
+import { formatCurrency, formatDate, escapeHtml, createToast, getImageUrl, getAddonImageUrl } from './utils.js';
 import { DEFAULT_CATEGORY_TAXONOMY, getCategoryDisplayName, getCategoryOptions } from './category-taxonomy.js';
 import { getQRCardHTML, initQRCode, bindQRDownloadHandlers } from './qr-utils.js';
 
@@ -9,6 +9,7 @@ const state = {
     restaurantProfile: null,
     userProfile: null,
     masterProducts: [],
+    masterAddons: [],
     menuItems: [],
     categories: [],
     orders: [],
@@ -738,6 +739,7 @@ async function loadRestaurantData() {
         await Promise.all([
             loadProfile(),
             loadMasterProducts(),
+            loadMasterAddons(),
             loadCategories(),
             loadMenuItems(),
             loadOrders(),
@@ -768,6 +770,11 @@ async function loadMasterProducts() {
     const snapshot = await firestore.collection('masterProducts').where('status', '==', 'active').get();
     state.masterProducts = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     renderCatalogFilters();
+}
+
+async function loadMasterAddons() {
+    const snapshot = await firestore.collection('masterAddons').get();
+    state.masterAddons = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })).filter((item) => item.status === 'active' && !item.isDeleted);
 }
 
 async function loadCategories() {
@@ -1596,6 +1603,7 @@ async function addToMenu(productId) {
         featured: false,
         recommended: false,
         todayDeal: false,
+        addonIds: [],
         discount: 0,
         preparationTime: masterProduct.preparationTime || 20,
         servingSize: 'Standard',
@@ -1641,6 +1649,12 @@ async function openMenuEditor(menuId) {
     const item = state.menuItems.find((entry) => entry.id === menuId);
     if (!item) return;
     modalTitle.textContent = 'Edit Menu Item';
+    const addonOptions = state.masterAddons.length ? state.masterAddons.map((addon) => `
+      <label class="chip" style="display:flex; align-items:center; gap:8px; justify-content:flex-start;">
+        <input type="checkbox" name="addonIds" value="${addon.id}" ${Array.isArray(item.addonIds) && item.addonIds.includes(addon.id) ? 'checked' : ''} />
+        <span>${escapeHtml(addon.name || 'Add-on')}</span>
+      </label>
+    `).join('') : '<div class="empty-state">No add-ons available yet.</div>';
     modalBody.innerHTML = `
     <form id="menuEditorForm" class="form-grid">
       <label>Price<input name="price" type="number" value="${item.price || 0}" /></label>
@@ -1653,6 +1667,7 @@ async function openMenuEditor(menuId) {
       <label><input type="checkbox" name="featured" ${item.featured ? 'checked' : ''} /> Featured</label>
       <label><input type="checkbox" name="recommended" ${item.recommended ? 'checked' : ''} /> Recommended</label>
       <label><input type="checkbox" name="todayDeal" ${item.todayDeal ? 'checked' : ''} /> Today's Deal</label>
+      <label class="full">Attached add-ons<div class="chip-row" style="margin-top: 8px;">${addonOptions}</div></label>
     </form>`;
     modalActions.innerHTML = `
     <button class="ghost-btn" id="cancelEditor">Cancel</button>
@@ -1660,18 +1675,19 @@ async function openMenuEditor(menuId) {
     modalBackdrop.classList.remove('hidden');
     document.getElementById('saveEditor').addEventListener('click', async () => {
         const form = document.getElementById('menuEditorForm');
-        const formData = Object.fromEntries(new FormData(form));
+        const formData = new FormData(form);
         const payload = {
-            price: Number(formData.price || 0),
-            preparationTime: Number(formData.preparationTime || 0),
-            servingSize: formData.servingSize,
-            stockStatus: formData.stockStatus,
-            restaurantDescription: formData.restaurantDescription,
-            notes: formData.notes,
-            availability: Boolean(formData.availability),
-            featured: Boolean(formData.featured),
-            recommended: Boolean(formData.recommended),
-            todayDeal: Boolean(formData.todayDeal),
+            price: Number(formData.get('price') || 0),
+            preparationTime: Number(formData.get('preparationTime') || 0),
+            servingSize: formData.get('servingSize'),
+            stockStatus: formData.get('stockStatus'),
+            restaurantDescription: formData.get('restaurantDescription'),
+            notes: formData.get('notes'),
+            availability: Boolean(formData.get('availability')),
+            featured: Boolean(formData.get('featured')),
+            recommended: Boolean(formData.get('recommended')),
+            todayDeal: Boolean(formData.get('todayDeal')),
+            addonIds: Array.from(new Set(formData.getAll('addonIds').map((value) => String(value)))),
             updatedAt: new Date()
         };
         await firestore.collection('restaurants').doc(state.restaurantId).collection('menu').doc(menuId).update(payload);
