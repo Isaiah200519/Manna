@@ -650,45 +650,33 @@ async function loadRestaurants() {
 
 async function loadVisibleProducts() {
     const customerLocation = getCustomerLocationCoordinates();
-    let menuSnapshot = await firestore.collectionGroup('menu').where('isAvailable', '==', true).get();
-    if (!menuSnapshot.size) {
-        menuSnapshot = await firestore.collectionGroup('menu').where('availability', '==', true).get();
-    }
+    const approvedRestaurants = await firestore.collection('restaurants').where('status', '==', 'approved').where('isActive', '==', true).get();
     const allProducts = [];
 
-    for (const menuDoc of menuSnapshot.docs) {
-        const menuItem = menuDoc.data() || {};
-        const isAvailable = menuItem.isAvailable ?? menuItem.availability ?? false;
-        if (!isAvailable) continue;
-
-        const restaurantRef = menuDoc.ref.parent?.parent;
-        const restaurantId = restaurantRef?.id || '';
-        let restaurantData = null;
-        let restaurantName = 'Restaurant';
-        let restaurantGeopoint = null;
-
-        if (restaurantId) {
-            const restaurantDoc = await firestore.collection('restaurants').doc(restaurantId).get();
-            restaurantData = restaurantDoc.data() || {};
-            if (restaurantData.status !== 'approved' || restaurantData.isActive === false) {
-                continue;
-            }
-            restaurantName = restaurantData.name || 'Restaurant';
-            restaurantGeopoint = normalizeGeoPoint(restaurantData.geopoint || restaurantData.location?.geopoint);
-        }
-
+    for (const restaurantDoc of approvedRestaurants.docs) {
+        const restaurantData = restaurantDoc.data() || {};
+        const restaurantId = restaurantDoc.id;
+        const restaurantName = restaurantData.name || 'Restaurant';
+        const restaurantGeopoint = normalizeGeoPoint(restaurantData.geopoint || restaurantData.location?.geopoint);
         const distance = customerLocation && restaurantGeopoint
             ? calculateDistance(customerLocation.latitude, customerLocation.longitude, restaurantGeopoint.latitude, restaurantGeopoint.longitude)
             : null;
 
-        allProducts.push({
-            id: menuDoc.id,
-            restaurantId,
-            ...menuItem,
-            restaurantName,
-            distance,
-            isAvailable: true
-        });
+        const menuSnapshot = await firestore.collection('restaurants').doc(restaurantId).collection('menu').get();
+        for (const menuDoc of menuSnapshot.docs) {
+            const menuItem = menuDoc.data() || {};
+            const isAvailable = menuItem.isAvailable ?? menuItem.availability ?? false;
+            if (!isAvailable) continue;
+
+            allProducts.push({
+                id: menuDoc.id,
+                restaurantId,
+                ...menuItem,
+                restaurantName,
+                distance,
+                isAvailable: true
+            });
+        }
     }
 
     state.menuItems = sortMenuItemsForCustomer(allProducts, customerLocation);
@@ -736,7 +724,23 @@ function renderAll() {
 }
 
 function renderHome() {
-    document.getElementById('homeCategories').innerHTML = state.categories.length ? state.categories.map((category) => `<button class="chip" data-category="${category}">${category}</button>`).join('') : '<div class="empty-state">No categories yet.</div>';
+    const categoryButtons = state.categories.length ? state.categories.map((category) => `<button class="chip" data-category="${category}">${category}</button>`).join('') : '<div class="empty-state">No categories yet.</div>';
+    document.getElementById('homeCategories').innerHTML = `
+        <button class="mobile-category-toggle" type="button" aria-expanded="false" aria-controls="homeCategoryList">
+            <span>Browse categories</span>
+            <span class="mobile-category-toggle__icon">▾</span>
+        </button>
+        <div id="homeCategoryList" class="chip-row mobile-category-list">${categoryButtons}</div>
+    `;
+
+    const toggle = document.querySelector('.mobile-category-toggle');
+    const list = document.getElementById('homeCategoryList');
+    toggle?.addEventListener('click', () => {
+        const expanded = toggle.getAttribute('aria-expanded') === 'true';
+        toggle.setAttribute('aria-expanded', String(!expanded));
+        list.classList.toggle('is-open', !expanded);
+    });
+
     document.querySelectorAll('[data-category]').forEach((button) => {
         button.addEventListener('click', () => {
             state.filters.category = button.dataset.category;
@@ -744,15 +748,17 @@ function renderHome() {
         });
     });
 
-    const featuredProducts = state.menuItems.filter((item) => item.availability !== false).slice(0, 8);
-    const customerLocation = getCustomerLocationCoordinates();
-    const locationNotice = customerLocation
-        ? '<div class="home-feed-note">Nearby restaurants are sorted first for faster delivery.</div>'
-        : '<div class="home-feed-note">Set your delivery address to see nearby restaurants first.</div>';
+    const featuredProducts = state.menuItems.filter((item) => item.isAvailable !== false && item.availability !== false);
+    const nearbyProducts = featuredProducts.filter((item) => item.distance !== null && item.distance !== undefined && Number.isFinite(item.distance));
+    const generalProducts = featuredProducts.filter((item) => item.distance === null || item.distance === undefined || !Number.isFinite(item.distance));
+    const sortedNearbyProducts = nearbyProducts.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
+    const sortedGeneralProducts = [...generalProducts].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    const renderedProducts = [...sortedNearbyProducts, ...sortedGeneralProducts];
 
-    document.getElementById('homeContent').innerHTML = `${locationNotice}${featuredProducts.length ? featuredProducts.map((item) => {
+    document.getElementById('homeContent').innerHTML = `${renderedProducts.length ? renderedProducts.map((item) => {
         const restaurant = state.restaurants.find((entry) => entry.id === item.restaurantId);
         const isFavorite = isFavoriteMenuItem(item.id);
+        const isNearby = item.distance !== null && item.distance !== undefined && Number.isFinite(item.distance);
         const distanceLabel = formatDistanceLabel(item.distance);
         return `
           <div class="item-card">
@@ -761,10 +767,11 @@ function renderHome() {
               <strong>${item.name}</strong>
               <div class="product-card-meta">
                 <span class="badge">${formatCurrency(item.price || 0)}</span>
+                ${isNearby ? '<span class="priority-badge">Nearby</span>' : ''}
                 ${distanceLabel ? `<span class="distance-badge">📍 ${distanceLabel}</span>` : ''}
               </div>
             </div>
-            <div class="muted">${item.restaurantDescription || item.description || 'Freshly prepared and ready for your order.'}</div>
+            <div class="muted card-description">${item.restaurantDescription || item.description || 'Freshly prepared and ready for your order.'}</div>
             <div class="muted">${restaurant?.name || item.restaurantName || 'Restaurant'}</div>
             <div class="modal-actions">
               <button class="primary-btn" data-add-order="${item.id}">Add to cart</button>
@@ -793,7 +800,7 @@ function renderRestaurants() {
     <div class="item-card">
       <img src="${getRestaurantImageUrl(restaurant)}" alt="${restaurant.name}" onerror="this.src='./images/placeholder.png'" />
       <div class="panel-card-header"><strong>${restaurant.name}</strong><span class="badge">${getCategoryDisplayName(restaurant.category || 'Food')}</span></div>
-      <div class="muted">${restaurant.description || 'Local favorites and hearty meals.'}</div>
+      <div class="muted card-description">${restaurant.description || 'Local favorites and hearty meals.'}</div>
       <div class="modal-actions">
         <button class="primary-btn" data-open-restaurant="${restaurant.id}">View Menu</button>
         <button class="${getFavoriteButtonClass(isFavoriteRestaurant(restaurant.id))}" data-favorite-restaurant="${restaurant.id}" aria-pressed="${isFavoriteRestaurant(restaurant.id) ? 'true' : 'false'}">${getFavoriteIcon(isFavoriteRestaurant(restaurant.id))}</button>
@@ -820,7 +827,7 @@ async function openRestaurant(restaurantId) {
           <div class="item-card">
             <img src="${getImageUrl(item.imageFilename || item.image || '')}" alt="${item.name}" onerror="this.src='./images/placeholder.png'" />
             <div class="panel-card-header"><strong>${item.name}</strong><span class="badge">${formatCurrency(item.price || 0)}</span></div>
-            <div class="muted">${item.restaurantDescription || 'Freshly prepared and ready to order.'}</div>
+            <div class="muted card-description">${item.restaurantDescription || 'Freshly prepared and ready to order.'}</div>
             <div class="modal-actions">
               <button class="primary-btn" data-add-order="${item.id}">Add to cart</button>
               <button class="ghost-btn" data-favorite-item="${item.id}">♡</button>
@@ -965,7 +972,7 @@ function renderFavorites() {
             <div class="item-card">
               <img src="${getImageUrl(item.imageFilename || item.image || '')}" alt="${item.name}" onerror="this.src='./images/placeholder.png'" />
               <div class="panel-card-header"><strong>${item.name}</strong><span class="badge">${formatCurrency(item.price || 0)}</span></div>
-              <div class="muted">${item.restaurantDescription || item.description || 'Freshly prepared and ready to order.'}</div>
+              <div class="muted card-description">${item.restaurantDescription || item.description || 'Freshly prepared and ready to order.'}</div>
               <div class="muted">${restaurant?.name || 'Restaurant'}</div>
               <div class="modal-actions">
                 <button class="primary-btn" data-add-order="${item.id}">Add to cart</button>
@@ -979,7 +986,7 @@ function renderFavorites() {
             <div class="item-card">
               <img src="${getRestaurantImageUrl(restaurant)}" alt="${restaurant.name}" onerror="this.src='./images/placeholder.png'" />
               <div class="panel-card-header"><strong>${restaurant.name}</strong><span class="badge">${getCategoryDisplayName(restaurant.category || 'Food')}</span></div>
-              <div class="muted">${restaurant.description || 'A favorite place to order from.'}</div>
+              <div class="muted card-description">${restaurant.description || 'A favorite place to order from.'}</div>
               <div class="modal-actions">
                 <button class="primary-btn" data-open-restaurant="${restaurant.id}">View Menu</button>
                 <button class="${getFavoriteButtonClass(true)}" data-favorite-restaurant="${restaurant.id}" aria-pressed="true">${getFavoriteIcon(true)}</button>

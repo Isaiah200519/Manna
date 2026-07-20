@@ -398,14 +398,17 @@ textarea:focus-visible {
     min-width: 0;
 }
 
-.home-feed-note {
-    margin-bottom: var(--space-md);
-    padding: 10px 12px;
-    border: 1px solid rgba(249, 115, 22, 0.25);
-    border-radius: var(--radius-small);
-    background: rgba(249, 115, 22, 0.12);
-    color: var(--text-muted);
-    font-size: 13px;
+.priority-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: var(--radius-pill);
+    background: rgba(249, 115, 22, 0.16);
+    color: #fdba74;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
 }
 
 .product-card-meta {
@@ -1585,7 +1588,7 @@ tr:last-child td {
 .product-grid {
     display: grid;
     gap: var(--space-md);
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .product-card {
@@ -2103,6 +2106,17 @@ tr:last-child td {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+#homeContent {
+    display: grid;
+    gap: var(--space-md);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin-top: 8px;
+}
+
+#homeContent .item-card {
+    min-width: 0;
+}
+
 .help-card {
     display: flex;
     flex-direction: column;
@@ -2292,19 +2306,68 @@ tr:last-child td {
 .chip-row {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-sm);
+    gap: 10px;
+    margin-top: 8px;
+    margin-bottom: 20px;
+    padding: 12px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    position: relative;
+    z-index: 2;
+}
+
+.mobile-category-toggle {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-main);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.mobile-category-toggle__icon {
+    transition: transform var(--transition-medium);
+}
+
+.mobile-category-list {
+    display: none;
+    margin-top: 10px;
+    margin-bottom: 0;
+}
+
+.mobile-category-list.is-open {
+    display: flex;
 }
 
 .chip,
 .category-chip {
     display: inline-flex;
     align-items: center;
-    gap: var(--space-sm);
-    padding: 8px 12px;
-    border-radius: var(--radius-pill);
-    background: var(--bg-input);
-    color: var(--text-muted);
-    border: 1px solid var(--border-color);
+    gap: 8px;
+    padding: 9px 14px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-main);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    transition: transform var(--transition-medium), box-shadow var(--transition-medium), background var(--transition-medium), border-color var(--transition-medium);
+}
+
+.chip:hover,
+.category-chip:hover {
+    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(249, 115, 22, 0.28);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
 }
 
 .chip.active,
@@ -2312,6 +2375,7 @@ tr:last-child td {
     background: linear-gradient(135deg, var(--accent), var(--accent-hover));
     color: white;
     border-color: transparent;
+    box-shadow: 0 8px 20px rgba(249, 115, 22, 0.24);
 }
 
 .user-badge {
@@ -2709,7 +2773,37 @@ tr:last-child td {
     }
 }
 
+@media (max-width: 1199px) {
+
+    .product-grid,
+    #homeContent {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
 @media (max-width: 767px) {
+    .mobile-category-toggle {
+        display: inline-flex;
+    }
+
+    .chip-row {
+        margin-bottom: 12px;
+    }
+
+    .mobile-category-list {
+        display: none;
+    }
+
+    .card-description {
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        line-height: 1.4;
+        min-height: calc(2 * 1.4em);
+    }
+
     body {
         padding-bottom: 104px;
     }
@@ -2728,8 +2822,10 @@ tr:last-child td {
     .stats-grid,
     .metric-grid,
     .dashboard-grid,
-    .form-grid {
-        grid-template-columns: 1fr;
+    .form-grid,
+    .product-grid,
+    #homeContent {
+        grid-template-columns: repeat(1, minmax(0, 1fr));
     }
 
     .sidebar,
