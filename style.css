@@ -2116,6 +2116,19 @@ tr:last-child td {
     min-width: 0;
 }
 
+.archived-order-card {
+    opacity: 0.72;
+    filter: grayscale(0.15);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+button:disabled,
+button.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
 .help-card {
     display: flex;
     flex-direction: column;

@@ -73,6 +73,7 @@ let firebase = null;
 let firestore = null;
 let auth = null;
 let authBootstrapTimer = null;
+let homeSearchTimeout = null;
 
 function clearAuthBootstrapTimer() {
     if (authBootstrapTimer) {
@@ -289,8 +290,12 @@ function bindEvents() {
         button.addEventListener('click', () => showSection(button.dataset.section));
     });
     document.getElementById('homeSearch')?.addEventListener('input', (event) => {
-        state.searchQuery = event.target.value.toLowerCase();
-        renderHome();
+        const nextValue = event.target.value.trim();
+        state.searchQuery = nextValue.toLowerCase();
+        window.clearTimeout(homeSearchTimeout);
+        homeSearchTimeout = window.setTimeout(() => {
+            renderHome();
+        }, 300);
     });
     document.getElementById('restaurantSearch')?.addEventListener('input', (event) => {
         state.searchQuery = event.target.value.toLowerCase();
@@ -785,9 +790,23 @@ function renderAll() {
     updateCartSummary();
 }
 
+function getProductSearchText(item = {}) {
+    const keywordText = Array.isArray(item.searchKeywords) ? item.searchKeywords.join(' ') : (item.searchKeywords || '');
+    return [
+        item.name,
+        item.restaurantName,
+        item.restaurantDescription,
+        item.description,
+        item.category,
+        getCategoryDisplayName(item.category),
+        keywordText
+    ].filter(Boolean).join(' ').toLowerCase();
+}
+
 function renderHome() {
-    const categoryMarkup = state.categories.length
-        ? state.categories.map((category) => `<button class="chip" data-category="${category}">${category}</button>`).join('')
+    const categoryOptions = [{ label: 'All', value: 'all' }, ...state.categories.map((category) => ({ label: category, value: category }))];
+    const categoryMarkup = categoryOptions.length
+        ? categoryOptions.map((category) => `<button class="chip ${state.filters.category === category.value ? 'active' : ''}" data-category="${category.value}">${category.label}</button>`).join('')
         : '<div class="empty-state">No categories yet.</div>';
 
     const desktopCategories = document.getElementById('homeCategories');
@@ -802,8 +821,10 @@ function renderHome() {
 
     document.querySelectorAll('[data-category]').forEach((button) => {
         button.addEventListener('click', () => {
-            state.filters.category = button.dataset.category;
-            showSection('restaurants');
+            const nextCategory = button.dataset.category || 'all';
+            const isSameCategory = state.filters.category === nextCategory;
+            state.filters.category = isSameCategory ? 'all' : nextCategory;
+            renderHome();
             if (window.innerWidth <= 767) {
                 closeMobileCategoryDropdown();
             }
@@ -811,8 +832,17 @@ function renderHome() {
     });
 
     const featuredProducts = state.menuItems.filter((item) => item.isAvailable !== false && item.availability !== false);
-    const nearbyProducts = featuredProducts.filter((item) => item.distance !== null && item.distance !== undefined && Number.isFinite(item.distance));
-    const generalProducts = featuredProducts.filter((item) => item.distance === null || item.distance === undefined || !Number.isFinite(item.distance));
+    const searchQuery = String(state.searchQuery || '').trim().toLowerCase();
+    const filteredProducts = featuredProducts.filter((item) => {
+        const matchesCategory = state.filters.category === 'all' || getCategoryDisplayName(item.category) === state.filters.category;
+        if (!matchesCategory) return false;
+        if (!searchQuery) return true;
+        const haystack = getProductSearchText(item);
+        const searchTerms = searchQuery.split(/\s+/).filter(Boolean);
+        return searchTerms.every((term) => haystack.includes(term));
+    });
+    const nearbyProducts = filteredProducts.filter((item) => item.distance !== null && item.distance !== undefined && Number.isFinite(item.distance));
+    const generalProducts = filteredProducts.filter((item) => item.distance === null || item.distance === undefined || !Number.isFinite(item.distance));
     const sortedNearbyProducts = nearbyProducts.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
     const sortedGeneralProducts = [...generalProducts].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     const renderedProducts = [...sortedNearbyProducts, ...sortedGeneralProducts];
@@ -904,26 +934,34 @@ async function openRestaurant(restaurantId) {
 
 function renderOrders() {
     const filtered = state.orders.filter((order) => {
+        if (order.isDeleted) return false;
         if (state.orderFilter === 'active') return ['pending', 'accepted', 'preparing', 'ready', 'picked_up', 'out_for_delivery', 'refund_requested'].includes(order.status);
         if (state.orderFilter === 'past') return ['delivered', 'completed', 'received'].includes(order.status);
         if (state.orderFilter === 'cancelled') return order.status === 'cancelled' || order.refundStatus === 'approved';
         return true;
     });
-    document.getElementById('ordersList').innerHTML = filtered.length ? filtered.map((order) => `
-    <div class="item-card">
+    document.getElementById('ordersList').innerHTML = filtered.length ? filtered.map((order) => {
+        const isArchived = Boolean(order.archived);
+        const canDelete = ['received', 'refunded'].includes(order.status);
+        const actionsDisabled = isArchived || ['received', 'refunded'].includes(order.status);
+        return `
+    <div class="item-card ${isArchived ? 'archived-order-card' : ''}">
       ${order.items?.length ? `<img src="${getImageUrl(order.items[0]?.imagePath || order.items[0]?.image || order.items[0]?.imageFilename || '')}" alt="${order.items[0]?.name || 'Item'}" onerror="this.src='./images/placeholder.png'" />` : ''}
       <div class="panel-card-header"><strong>#${order.orderNumber || order.id.slice(0, 6)}</strong><span class="badge">${order.status}</span></div>
       <div class="muted">${formatCurrency(order.total || 0)} • ${order.restaurantName || 'Restaurant'}</div>
       <div class="muted">ETA: ${order.estimatedDeliveryTime ? formatDate(order.estimatedDeliveryTime) : 'Pending'} • Refund: ${order.refundStatus || 'none'}</div>
       <div class="modal-actions">
-        <button class="ghost-btn" data-track-order="${order.id}">Track</button>
-        <button class="ghost-btn" data-repeat-order="${order.id}">Repeat</button>
-        <button class="ghost-btn" data-request-refund="${order.id}" ${canRequestRefund(order) ? '' : 'disabled'}>${getRefundButtonLabel(order)}</button>
+        <button class="ghost-btn" data-track-order="${order.id}" ${actionsDisabled ? 'disabled' : ''}>Track</button>
+        <button class="ghost-btn" data-repeat-order="${order.id}" ${actionsDisabled ? 'disabled' : ''}>Repeat</button>
+        <button class="ghost-btn" data-request-refund="${order.id}" ${canRequestRefund(order) && !isArchived ? '' : 'disabled'}>${getRefundButtonLabel(order)}</button>
+        ${canDelete ? `<button class="danger-btn" data-delete-order="${order.id}">Delete</button>` : ''}
       </div>
-    </div>`).join('') : '<div class="empty-state">No orders yet.</div>';
+    </div>`;
+    }).join('') : '<div class="empty-state">No orders yet.</div>';
     document.querySelectorAll('[data-track-order]').forEach((button) => button.addEventListener('click', () => trackOrder(button.dataset.trackOrder)));
     document.querySelectorAll('[data-repeat-order]').forEach((button) => button.addEventListener('click', () => repeatOrder(button.dataset.repeatOrder)));
     document.querySelectorAll('[data-request-refund]').forEach((button) => button.addEventListener('click', () => requestRefund(button.dataset.requestRefund)));
+    document.querySelectorAll('[data-delete-order]').forEach((button) => button.addEventListener('click', () => deleteOrderFromUI(button.dataset.deleteOrder)));
 }
 
 function canRequestRefund(order) {
@@ -945,6 +983,21 @@ async function requestRefund(orderId) {
         createToast('Refund request sent to the restaurant.', 'success');
     } catch (error) {
         createToast(error.message, 'error');
+    }
+}
+
+async function deleteOrderFromUI(orderId) {
+    const order = state.orders.find((entry) => entry.id === orderId);
+    if (!order || !['received', 'refunded'].includes(order.status)) return;
+    const confirmed = window.confirm('Are you sure you want to permanently delete this order? This action cannot be undone.');
+    if (!confirmed) return;
+    try {
+        await firestore.collection('orders').doc(orderId).set({ isDeleted: true, updatedAt: new Date() }, { merge: true });
+        state.orders = state.orders.filter((entry) => entry.id !== orderId);
+        renderOrders();
+        createToast('Order deleted.', 'success');
+    } catch (error) {
+        createToast(error.message || 'Unable to delete the order.', 'error');
     }
 }
 

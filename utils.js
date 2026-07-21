@@ -53,6 +53,20 @@ export function getImageUrl(filename, fallback = './images/placeholder.png') {
     return `./images/products/${normalized}`;
 }
 
+export async function deleteOrder(orderId, firestore, options = {}) {
+    if (!orderId || !firestore) return false;
+    const { onSuccess, onError, userId, role } = options;
+    try {
+        const update = { isDeleted: true, updatedAt: new Date() };
+        await firestore.collection('orders').doc(orderId).set(update, { merge: true });
+        if (typeof onSuccess === 'function') onSuccess();
+        return true;
+    } catch (error) {
+        if (typeof onError === 'function') onError(error);
+        return false;
+    }
+}
+
 export function getAddonImageUrl(filename, fallback = './images/placeholder.png') {
     if (!filename) return fallback;
     const normalized = String(filename).trim();

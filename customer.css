@@ -570,6 +570,12 @@ input[type="search"]:focus {
     border-radius: 999px;
 }
 
+.chip.active {
+    background: rgba(249, 115, 22, 0.2);
+    border-color: rgba(249, 115, 22, 0.45);
+    color: #fdba74;
+}
+
 .badge {
     display: inline-flex;
     align-items: center;

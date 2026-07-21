@@ -1050,19 +1050,21 @@ function renderMenu() {
 }
 
 function renderOrders() {
-    const filtered = state.orders.filter((order) => state.orderFilter === 'all' || order.status === state.orderFilter);
+    const filtered = state.orders.filter((order) => !order.isDeleted && (state.orderFilter === 'all' || order.status === state.orderFilter));
     document.getElementById('ordersList').innerHTML = filtered.length ? filtered.map((order) => {
         const currentStatus = order.status || 'pending';
-        const acceptButtonClass = currentStatus === 'pending' ? 'primary-btn is-active' : 'ghost-btn';
-        const rejectButtonClass = ['pending', 'accepted', 'preparing'].includes(currentStatus) ? 'ghost-btn' : 'ghost-btn';
-        const prepareButtonClass = ['accepted', 'preparing'].includes(currentStatus) ? 'primary-btn is-active' : 'ghost-btn';
-        const readyButtonClass = ['preparing', 'ready'].includes(currentStatus) ? 'primary-btn is-active' : 'ghost-btn';
-        const acceptDisabled = currentStatus !== 'pending';
-        const rejectDisabled = ['cancelled', 'delivered', 'received'].includes(currentStatus);
-        const prepareDisabled = !['accepted', 'preparing'].includes(currentStatus);
-        const readyDisabled = !['preparing', 'ready'].includes(currentStatus);
+        const shouldDisableActions = Boolean(order.archived);
+        const acceptButtonClass = currentStatus === 'pending' && !shouldDisableActions ? 'primary-btn is-active' : 'ghost-btn';
+        const rejectButtonClass = ['pending', 'accepted', 'preparing'].includes(currentStatus) && !shouldDisableActions ? 'ghost-btn' : 'ghost-btn';
+        const prepareButtonClass = ['accepted', 'preparing'].includes(currentStatus) && !shouldDisableActions ? 'primary-btn is-active' : 'ghost-btn';
+        const readyButtonClass = ['preparing', 'ready'].includes(currentStatus) && !shouldDisableActions ? 'primary-btn is-active' : 'ghost-btn';
+        const acceptDisabled = currentStatus !== 'pending' || shouldDisableActions;
+        const rejectDisabled = ['cancelled', 'delivered', 'received'].includes(currentStatus) || shouldDisableActions;
+        const prepareDisabled = !['accepted', 'preparing'].includes(currentStatus) || shouldDisableActions;
+        const readyDisabled = !['preparing', 'ready'].includes(currentStatus) || shouldDisableActions;
+        const canDelete = ['received', 'refunded'].includes(currentStatus);
         return `
-    <div class="list-item">
+    <div class="list-item ${shouldDisableActions ? 'archived-order-card' : ''}">
       <div class="panel-card-header">
         <strong>${order.customerName || 'Customer'} • #${order.orderNumber || order.id.slice(0, 6)}</strong>
         <span class="badge">${currentStatus}</span>
@@ -1080,6 +1082,7 @@ function renderOrders() {
         ${order.refundStatus === 'requested' ? `<button class="ghost-btn" data-order-action="approve-refund" data-order-id="${order.id}">Approve Refund</button><button class="ghost-btn" data-order-action="reject-refund" data-order-id="${order.id}">Reject Refund</button>` : ''}
         <button class="ghost-btn" data-order-action="details" data-order-id="${order.id}">Details</button>
         <button class="ghost-btn" data-open-order-chat="${order.id}">Chat</button>
+        ${canDelete ? `<button class="danger-btn" data-delete-order="${order.id}">Delete</button>` : ''}
       </div>
     </div>`;
     }).join('') : '<div class="empty-state">No orders found.</div>';
@@ -1089,6 +1092,24 @@ function renderOrders() {
     document.querySelectorAll('[data-open-order-chat]').forEach((button) => {
         button.addEventListener('click', () => openOrderChat(button.dataset.openOrderChat));
     });
+    document.querySelectorAll('[data-delete-order]').forEach((button) => {
+        button.addEventListener('click', () => deleteOrderFromUI(button.dataset.deleteOrder));
+    });
+}
+
+async function deleteOrderFromUI(orderId) {
+    const order = state.orders.find((entry) => entry.id === orderId);
+    if (!order || !['received', 'refunded'].includes(order.status)) return;
+    const confirmed = window.confirm('Are you sure you want to permanently delete this order? This action cannot be undone.');
+    if (!confirmed) return;
+    try {
+        await firestore.collection('orders').doc(orderId).set({ isDeleted: true, updatedAt: new Date() }, { merge: true });
+        state.orders = state.orders.filter((entry) => entry.id !== orderId);
+        renderOrders();
+        createToast('Order deleted.', 'success');
+    } catch (error) {
+        createToast(error.message || 'Unable to delete the order.', 'error');
+    }
 }
 
 function renderReviews() {

@@ -627,7 +627,7 @@ function renderAvailableOrders() {
 }
 
 function renderActiveDeliveries() {
-    const active = state.allOrders.filter((order) => !order.isDeleted && order.deliveryPersonUid === state.authUser?.uid && order.status === 'out_for_delivery');
+    const active = state.allOrders.filter((order) => !order.isDeleted && !order.archived && order.deliveryPersonUid === state.authUser?.uid && order.status === 'out_for_delivery');
     document.getElementById('activeDeliveriesList').innerHTML = active.length ? active.map((order) => `
     <div class="item-card">
       <img src="${getImagePath(order.items?.[0]?.imagePath || order.items?.[0]?.image || order.items?.[0]?.imageFilename || '', 'products')}" alt="${order.items?.[0]?.name || 'Order'}" />
@@ -656,7 +656,7 @@ function renderHistory() {
       <div class="muted">${order.customerName || 'Customer'} • ${formatDate(order.updatedAt || order.createdAt)}</div>
       <div class="action-row">
         <button class="ghost-btn" data-action="open-chat" data-id="${order.id}">Chat</button>
-        <button class="danger-btn" data-action="delete-history" data-id="${order.id}">Delete</button>
+        ${['received', 'refunded'].includes(order.status) ? `<button class="danger-btn" data-action="delete-history" data-id="${order.id}">Delete</button>` : ''}
       </div>
     </div>`).join('') : '<div class="empty-state">Delivery history is empty.</div>';
 }
@@ -1220,6 +1220,16 @@ function toggleSupportModal() {
         return;
     }
     openSupportModal();
+}
+
+function ensureDeliveryProfileComplete() {
+    const profile = state.profile || {};
+    const hasRequiredFields = Boolean(profile.phone || profile.mobile || profile.contactPhone) && Boolean(profile.vehicleType || profile.vehicleNumber || profile.vehicle || profile.deliveryVehicle);
+    if (!hasRequiredFields) {
+        createToast('Please complete your delivery profile before picking up orders.', 'warning');
+        return false;
+    }
+    return true;
 }
 
 function openSupportModal() {
