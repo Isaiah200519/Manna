@@ -249,7 +249,40 @@
                         <button class="primary-btn" data-section="restaurants">Browse now</button>
                     </div>
                 </div>
-                <div id="homeCategories" class="category-filter-shell"></div>
+                <div class="category-filter-shell" data-category-session>
+                    <div class="desktop-category-chips">
+                        <div class="category-filter-header" role="button" tabindex="0" aria-expanded="false"
+                            aria-controls="homeCategories">
+                            <div class="category-filter-title">
+                                <span class="eyebrow">Categories</span>
+                                <strong>Browse by taste</strong>
+                            </div>
+                            <span class="mobile-category-toggle" aria-hidden="true">
+                                <span>Browse</span>
+                                <span class="mobile-category-toggle__icon">▾</span>
+                            </span>
+                        </div>
+                        <div id="homeCategories" class="chip-row"></div>
+                    </div>
+
+                    <div class="mobile-category-filter">
+                        <div class="filter-trigger" role="button" tabindex="0" aria-expanded="false">
+                            <span>Filter by Category</span>
+                            <svg class="trigger-icon" viewBox="0 0 24 24" width="16" height="16" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <path d="M6 9l6 6 6-6" />
+                            </svg>
+                        </div>
+
+                        <div class="category-dropdown" aria-hidden="true">
+                            <div class="category-dropdown__header">
+                                <h4>Categories</h4>
+                                <button class="close-btn" type="button" aria-label="Close categories">×</button>
+                            </div>
+                            <div id="mobileHomeCategories" class="category-dropdown__list"></div>
+                        </div>
+                    </div>
+                </div>
                 <div id="homeContent" class="stack"></div>
             </section>
 

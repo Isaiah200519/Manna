@@ -206,6 +206,38 @@ function init() {
     auth.onAuthStateChanged(handleAuthStateChange);
 }
 
+function toggleMobileCategoryDropdown(trigger) {
+    if (window.innerWidth > 767) return;
+    const dropdown = trigger?.nextElementSibling;
+    if (!dropdown || !dropdown.classList.contains('category-dropdown')) return;
+
+    const isOpen = dropdown.classList.contains('open');
+    const activeDropdown = document.querySelector('.category-dropdown.open');
+    if (activeDropdown && activeDropdown !== dropdown) {
+        activeDropdown.classList.remove('open');
+        activeDropdown.setAttribute('aria-hidden', 'true');
+        const activeTrigger = activeDropdown.previousElementSibling;
+        activeTrigger?.classList.remove('active');
+        activeTrigger?.setAttribute('aria-expanded', 'false');
+    }
+
+    dropdown.classList.toggle('open', !isOpen);
+    dropdown.setAttribute('aria-hidden', String(isOpen));
+    trigger.classList.toggle('active', !isOpen);
+    trigger.setAttribute('aria-expanded', String(!isOpen));
+}
+
+function closeMobileCategoryDropdown() {
+    const dropdown = document.querySelector('.category-dropdown.open');
+    if (!dropdown) return;
+
+    dropdown.classList.remove('open');
+    dropdown.setAttribute('aria-hidden', 'true');
+    const trigger = dropdown.previousElementSibling;
+    trigger?.classList.remove('active');
+    trigger?.setAttribute('aria-expanded', 'false');
+}
+
 function bindEvents() {
     loginForm?.addEventListener('submit', handleLogin);
     registerForm?.addEventListener('submit', handleRegister);
@@ -291,6 +323,36 @@ function bindEvents() {
             showSection(sectionButton.dataset.section);
         }
     });
+    document.addEventListener('click', (event) => {
+        const trigger = event.target.closest('.filter-trigger');
+        if (trigger && window.innerWidth <= 767) {
+            event.stopPropagation();
+            toggleMobileCategoryDropdown(trigger);
+            return;
+        }
+
+        const closeButton = event.target.closest('.close-btn');
+        if (closeButton && window.innerWidth <= 767) {
+            event.stopPropagation();
+            closeMobileCategoryDropdown();
+            return;
+        }
+
+        const dropdown = document.querySelector('.category-dropdown.open');
+        if (dropdown && !dropdown.contains(event.target) && !event.target.closest('.filter-trigger')) {
+            closeMobileCategoryDropdown();
+        }
+    });
+
+    document.addEventListener('keydown', (event) => {
+        const trigger = event.target.closest('.filter-trigger');
+        if (!trigger || window.innerWidth > 767) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            toggleMobileCategoryDropdown(trigger);
+        }
+    });
+
     modalClose?.addEventListener('click', closeModal);
     modalBackdrop?.addEventListener('click', (event) => {
         if (event.target === modalBackdrop) closeModal();
@@ -724,34 +786,27 @@ function renderAll() {
 }
 
 function renderHome() {
-    const categoryButtons = state.categories.length ? state.categories.map((category) => `<button class="chip" data-category="${category}">${category}</button>`).join('') : '<div class="empty-state">No categories yet.</div>';
-    const homeCategories = document.getElementById('homeCategories');
-    homeCategories.innerHTML = `
-        <button class="mobile-category-toggle" type="button" aria-expanded="false" aria-controls="homeCategoryList">
-            <span>Browse categories</span>
-            <span class="mobile-category-toggle__icon">▾</span>
-        </button>
-        <div id="homeCategoryList" class="chip-row mobile-category-list">${categoryButtons}</div>
-    `;
+    const categoryMarkup = state.categories.length
+        ? state.categories.map((category) => `<button class="chip" data-category="${category}">${category}</button>`).join('')
+        : '<div class="empty-state">No categories yet.</div>';
 
-    const toggle = homeCategories.querySelector('.mobile-category-toggle');
-    const list = homeCategories.querySelector('#homeCategoryList');
-    toggle?.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const expanded = toggle.getAttribute('aria-expanded') === 'true';
-        toggle.setAttribute('aria-expanded', String(!expanded));
-        list?.classList.toggle('is-open', !expanded);
-    });
+    const desktopCategories = document.getElementById('homeCategories');
+    if (desktopCategories) {
+        desktopCategories.innerHTML = categoryMarkup;
+    }
 
-    homeCategories.querySelectorAll('[data-category]').forEach((button) => {
+    const mobileCategories = document.getElementById('mobileHomeCategories');
+    if (mobileCategories) {
+        mobileCategories.innerHTML = categoryMarkup;
+    }
+
+    document.querySelectorAll('[data-category]').forEach((button) => {
         button.addEventListener('click', () => {
             state.filters.category = button.dataset.category;
-            if (window.innerWidth <= 767) {
-                toggle?.setAttribute('aria-expanded', 'false');
-                list?.classList.remove('is-open');
-            }
             showSection('restaurants');
+            if (window.innerWidth <= 767) {
+                closeMobileCategoryDropdown();
+            }
         });
     });
 
@@ -781,7 +836,7 @@ function renderHome() {
             <div class="muted card-description">${item.restaurantDescription || item.description || 'Freshly prepared and ready for your order.'}</div>
             <div class="muted">${restaurant?.name || item.restaurantName || 'Restaurant'}</div>
             <div class="modal-actions">
-              <button class="primary-btn" data-add-order="${item.id}">Add to cart</button>
+              <button class="primary-btn" data-add-order="${item.id}">Buy</button>
               <button class="${getFavoriteButtonClass(isFavorite)}" data-favorite-item="${item.id}" aria-pressed="${isFavorite ? 'true' : 'false'}">${getFavoriteIcon(isFavorite)}</button>
             </div>
           </div>`;
