@@ -21,7 +21,7 @@ window.addEventListener('load', () => {
 document.addEventListener('DOMContentLoaded', () => {
     setupAuthRouter({
         onRoleResolved: (role) => {
-            window.location.href = resolvePanel(role);
+            window.location.replace(resolvePanel(role));
         }
     });
 });

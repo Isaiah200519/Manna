@@ -10,6 +10,10 @@ export function setupAuthRouter(options = {}) {
     let phoneRecaptchaVerifier = null;
     let activePhoneFlow = 'login';
 
+    if (auth?.currentUser) {
+        shouldRedirectAfterAuth = true;
+    }
+
     if (auth && typeof auth.setPersistence === 'function' && window.firebase?.auth?.Auth?.Persistence) {
         auth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL).catch((error) => {
             console.warn('[MANNA] Auth persistence setup failed:', error);
@@ -313,7 +317,10 @@ export function setupAuthRouter(options = {}) {
             resetPhoneFlow();
             return;
         }
-        if (!shouldRedirectAfterAuth) return;
+
+        const shouldRedirectForSession = shouldRedirectAfterAuth || Boolean(auth?.currentUser);
+        if (!shouldRedirectForSession) return;
+
         try {
             const doc = await firestore.collection('users').doc(user.uid).get();
             const profile = doc.exists ? doc.data() : null;
