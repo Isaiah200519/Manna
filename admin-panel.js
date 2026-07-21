@@ -1143,6 +1143,7 @@ function openAddonModal(addonId = null) {
   };
 
   imageInput?.addEventListener('input', updatePreview);
+  imageInput?.addEventListener('change', updatePreview);
   updatePreview();
   document.getElementById('addonForm').addEventListener('submit', async (event) => {
     event.preventDefault();

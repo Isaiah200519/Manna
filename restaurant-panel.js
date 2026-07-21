@@ -1645,6 +1645,105 @@ async function bulkDeleteMenu() {
     createToast('Selected items removed.', 'success');
 }
 
+async function openRestaurantAddonEditor(addonId, menuId = null) {
+    const addon = state.masterAddons.find((entry) => entry.id === addonId) || {};
+    const initialImage = String(addon.imageFilename || addon.image || '').trim();
+    modalTitle.textContent = 'Edit Add-On';
+    modalBody.innerHTML = `
+    <form id="restaurantAddonEditorForm" class="form-grid">
+      <label>Name<input name="name" value="${escapeHtml(addon.name || '')}" required /></label>
+      <label>Price<input name="price" type="number" min="0" value="${addon.price ?? 0}" /></label>
+      <label>Category<select name="category">
+        <option value="Water" ${String(addon.category || '').trim() === 'Water' ? 'selected' : ''}>Water</option>
+        <option value="Non Alcoholic drinks" ${String(addon.category || '').trim() === 'Non Alcoholic drinks' ? 'selected' : ''}>Non Alcoholic drinks</option>
+        <option value="Alcoholic drinks" ${String(addon.category || '').trim() === 'Alcoholic drinks' ? 'selected' : ''}>Alcoholic drinks</option>
+      </select></label>
+      <label>Status<select name="status">
+        <option value="active" ${addon.status === 'active' ? 'selected' : ''}>Active</option>
+        <option value="inactive" ${addon.status === 'inactive' ? 'selected' : ''}>Inactive</option>
+      </select></label>
+      <label>Image<input id="restaurantAddonImageInput" name="imageFilename" value="${escapeHtml(initialImage)}" placeholder="bottle-water.png" /></label>
+      <div id="restaurantAddonImagePreviewWrapper" class="addon-image-preview-wrapper ${initialImage ? '' : 'hidden'}">
+        <div class="addon-image-preview-label">Preview</div>
+        <img id="restaurantAddonImagePreview" class="addon-image-preview" src="${getAddonImageUrl(initialImage)}" alt="Add-on preview" />
+        <div id="restaurantAddonImageStatus" class="addon-image-preview-status">${initialImage ? 'Previewing the selected image' : 'No image selected'}</div>
+      </div>
+      <label class="full">Description<textarea name="description">${escapeHtml(addon.description || '')}</textarea></label>
+    </form>`;
+    modalActions.innerHTML = `
+    <button class="ghost-btn" id="cancelRestaurantAddonEditor">Cancel</button>
+    <button class="primary-btn" id="saveRestaurantAddonEditor">Save</button>`;
+    modalBackdrop.classList.remove('hidden');
+
+    const imageInput = document.getElementById('restaurantAddonImageInput');
+    const previewWrapper = document.getElementById('restaurantAddonImagePreviewWrapper');
+    const previewImage = document.getElementById('restaurantAddonImagePreview');
+    const previewStatus = document.getElementById('restaurantAddonImageStatus');
+    const updatePreview = () => {
+        const imageValue = String(imageInput?.value || '').trim();
+        if (!imageValue) {
+            previewWrapper?.classList.add('hidden');
+            if (previewImage) previewImage.src = './images/placeholder.png';
+            if (previewStatus) previewStatus.textContent = 'No image selected';
+            return;
+        }
+        previewWrapper?.classList.remove('hidden');
+        if (previewImage) {
+            const resolvedUrl = getAddonImageUrl(imageValue);
+            previewImage.onerror = () => {
+                previewImage.src = './images/placeholder.png';
+                if (previewStatus) previewStatus.textContent = 'Image not found — using placeholder';
+            };
+            previewImage.onload = () => {
+                if (previewStatus) previewStatus.textContent = 'Previewing the selected image';
+            };
+            previewImage.src = resolvedUrl;
+            if (previewStatus) previewStatus.textContent = 'Loading image preview…';
+        }
+    };
+
+    imageInput?.addEventListener('input', updatePreview);
+    imageInput?.addEventListener('change', updatePreview);
+    updatePreview();
+
+    document.getElementById('saveRestaurantAddonEditor')?.addEventListener('click', async () => {
+        const form = document.getElementById('restaurantAddonEditorForm');
+        if (!form) return;
+        const formData = new FormData(form);
+        const payload = {
+            name: String(formData.get('name') || '').trim(),
+            price: Number(formData.get('price') || 0),
+            category: String(formData.get('category') || '').trim(),
+            status: String(formData.get('status') || 'active').trim(),
+            description: String(formData.get('description') || '').trim(),
+            imageFilename: String(formData.get('imageFilename') || '').trim(),
+            image: String(formData.get('imageFilename') || '').trim(),
+            updatedAt: new Date()
+        };
+        if (!payload.name) {
+            createToast('Please add a name for the add-on.', 'warning');
+            return;
+        }
+        await firestore.collection('masterAddons').doc(addonId).update(payload);
+        const addonIndex = state.masterAddons.findIndex((entry) => entry.id === addonId);
+        if (addonIndex >= 0) {
+            state.masterAddons[addonIndex] = { ...state.masterAddons[addonIndex], ...payload };
+        }
+        createToast('Add-on updated.', 'success');
+        closeModal();
+        if (menuId) {
+            await loadMasterAddons();
+            openMenuEditor(menuId);
+        }
+    });
+    document.getElementById('cancelRestaurantAddonEditor')?.addEventListener('click', () => {
+        closeModal();
+        if (menuId) {
+            openMenuEditor(menuId);
+        }
+    });
+}
+
 async function openMenuEditor(menuId) {
     const item = state.menuItems.find((entry) => entry.id === menuId);
     if (!item) return;
@@ -1653,6 +1752,7 @@ async function openMenuEditor(menuId) {
       <label class="chip" style="display:flex; align-items:center; gap:8px; justify-content:flex-start;">
         <input type="checkbox" name="addonIds" value="${addon.id}" ${Array.isArray(item.addonIds) && item.addonIds.includes(addon.id) ? 'checked' : ''} />
         <span>${escapeHtml(addon.name || 'Add-on')}</span>
+        <button type="button" class="ghost-btn" data-edit-addon="${addon.id}" style="padding: 6px 8px; margin-left: auto; border-radius: 999px;">Edit</button>
       </label>
     `).join('') : '<div class="empty-state">No add-ons available yet.</div>';
     modalBody.innerHTML = `
@@ -1673,7 +1773,16 @@ async function openMenuEditor(menuId) {
     <button class="ghost-btn" id="cancelEditor">Cancel</button>
     <button class="primary-btn" id="saveEditor">Save</button>`;
     modalBackdrop.classList.remove('hidden');
-    document.getElementById('saveEditor').addEventListener('click', async () => {
+    modalBody.querySelectorAll('[data-edit-addon]').forEach((button) => {
+        button.addEventListener('click', (event) => {
+            const addonId = event.currentTarget?.getAttribute('data-edit-addon');
+            if (addonId) {
+                openRestaurantAddonEditor(addonId, menuId);
+            }
+        });
+    });
+    const saveButton = document.getElementById('saveEditor');
+    saveButton?.addEventListener('click', async () => {
         const form = document.getElementById('menuEditorForm');
         const formData = new FormData(form);
         const payload = {
