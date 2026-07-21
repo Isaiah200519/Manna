@@ -579,6 +579,10 @@ auth-message {
 
 .modal-card {
     width: min(100%, 720px);
+    max-height: calc(100vh - 40px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     background: linear-gradient(135deg, rgba(17, 28, 47, 0.98), rgba(22, 37, 59, 0.95));
     border: 1px solid var(--border);
     border-radius: 24px;
@@ -595,8 +599,11 @@ auth-message {
 
 .modal-body {
     margin-top: 8px;
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: 12px;
+    flex: 1 1 auto;
+    overflow-y: auto;
 }
 
 .chat-list {

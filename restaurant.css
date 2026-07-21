@@ -527,6 +527,10 @@ input[type="search"]:focus {
 
 .modal-card {
     width: min(100%, 720px);
+    max-height: calc(100vh - 40px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 20px;
@@ -541,6 +545,11 @@ input[type="search"]:focus {
 
 .modal-body {
     margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex: 1 1 auto;
+    overflow-y: auto;
 }
 
 .modal-actions {
