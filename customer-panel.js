@@ -1432,10 +1432,6 @@ function renderLocationPicker() {
     initLocationPickerMap('locationMap', 'locationStatus');
 }
 
-function escapeHtml(value) {
-    return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
 function initLocationPickerMap(containerId = 'locationMap', statusElementId = 'locationStatus') {
     const mapContainer = document.getElementById(containerId);
     if (!mapContainer || typeof window.L === 'undefined') return;
