@@ -37,6 +37,20 @@
     --shadow-glow: 0 0 20px var(--accent-glow);
 }
 
+html,
+body {
+    max-width: 100%;
+    overflow-x: hidden;
+    margin: 0;
+    padding: 0;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
 /* keep the mobile header toggle visible so the sidebar can be opened on compact screens */
 @media (max-width: 767px) {
 
@@ -45,6 +59,8 @@
         width: 100%;
         max-width: 100%;
         -ms-overflow-style: none;
+        margin: 0;
+        padding: 0;
     }
 
     html::-webkit-scrollbar,
@@ -52,17 +68,11 @@
         display: none;
     }
 
-    body {
-        width: 95vw;
-        max-width: 95vw;
-        margin: 0 auto;
-    }
-
     .auth-screen,
     .app-shell {
         width: 100%;
-        max-width: 95vw;
-        margin: 0 auto;
+        max-width: 100%;
+        margin: 0;
     }
 
     .sidebar {
@@ -2908,6 +2918,58 @@ button.disabled {
 .toast-close:hover {
     background: var(--bg-input);
     color: var(--text-main);
+}
+
+.push-permission-banner {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    bottom: 24px;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 20px;
+    border-radius: 18px;
+    background: rgba(12, 24, 46, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.22);
+    backdrop-filter: blur(18px);
+    color: #fff;
+    animation: slideIn 240ms ease-out;
+}
+
+.push-permission-banner .push-permission-content {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.push-permission-banner .push-permission-content strong {
+    display: block;
+    font-size: 0.98rem;
+    margin-bottom: 6px;
+}
+
+.push-permission-banner .push-permission-content p {
+    margin: 0;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.82);
+    font-size: 0.93rem;
+}
+
+.push-permission-banner .push-permission-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 180px;
+}
+
+.push-permission-banner .primary-btn,
+.push-permission-banner .ghost-btn {
+    min-width: 120px;
 }
 
 .bottom-nav {

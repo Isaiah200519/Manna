@@ -382,12 +382,16 @@ input[type="search"]:focus {
     flex-wrap: wrap;
 }
 
-.toolbar,
+..toolbar,
 .bulk-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
     align-items: center;
+}
+
+.analytics-toolbar {
+    margin-bottom: 12px;
 }
 
 .list-stack {

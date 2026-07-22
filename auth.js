@@ -1,4 +1,6 @@
 import { initFirebase } from './firebase-config.js';
+import { createToast } from './utils.js';
+import { initializePushForUser } from './push-notifications.js';
 
 export function setupAuthRouter(options = {}) {
     const { onRoleResolved } = options;
@@ -325,6 +327,7 @@ export function setupAuthRouter(options = {}) {
             const doc = await firestore.collection('users').doc(user.uid).get();
             const profile = doc.exists ? doc.data() : null;
             const role = profile?.role || 'customer';
+            await initializePushForUser(user, firestore, { showToast: createToast });
             if (typeof onRoleResolved === 'function') {
                 onRoleResolved(role);
             }
