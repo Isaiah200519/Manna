@@ -1,6 +1,5 @@
 import { initFirebase, clearStoredAuthState } from './firebase-config.js';
 import { formatCurrency, formatDate, escapeHtml, createToast, getImageUrl, getAddonImageUrl, getCommunityOptions, isDateInRange } from './utils.js';
-import { initializePushForUser } from './push-notifications.js';
 import { DEFAULT_CATEGORY_TAXONOMY, getCategoryDisplayName, getCategoryOptions } from './category-taxonomy.js';
 import { getQRCardHTML, initQRCode, bindQRDownloadHandlers } from './qr-utils.js';
 
@@ -687,7 +686,6 @@ async function handleAuthStateChange(user) {
         };
         state.restaurantId = resolvedRestaurant.id;
         state.restaurantProfile = normalizedProfile;
-        await initializePushForUser(user, firestore, { showToast: createToast });
         setupFinancialListeners();
         authScreen.classList.add('hidden');
         appShell.classList.remove('hidden');

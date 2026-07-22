@@ -37,20 +37,6 @@
     --shadow-glow: 0 0 20px var(--accent-glow);
 }
 
-html,
-body {
-    max-width: 100%;
-    overflow-x: hidden;
-    margin: 0;
-    padding: 0;
-}
-
-*,
-*::before,
-*::after {
-    box-sizing: border-box;
-}
-
 /* keep the mobile header toggle visible so the sidebar can be opened on compact screens */
 @media (max-width: 767px) {
 
@@ -59,8 +45,6 @@ body {
         width: 100%;
         max-width: 100%;
         -ms-overflow-style: none;
-        margin: 0;
-        padding: 0;
     }
 
     html::-webkit-scrollbar,
@@ -68,11 +52,17 @@ body {
         display: none;
     }
 
+    body {
+        width: 95vw;
+        max-width: 95vw;
+        margin: 0 auto;
+    }
+
     .auth-screen,
     .app-shell {
         width: 100%;
-        max-width: 100%;
-        margin: 0;
+        max-width: 95vw;
+        margin: 0 auto;
     }
 
     .sidebar {
@@ -106,9 +96,16 @@ html {
     scroll-behavior: smooth;
 }
 
+body * {
+    transition: transform 220ms ease, box-shadow 220ms ease, background 220ms ease, border-color 220ms ease, color 220ms ease;
+}
+
 body {
     min-height: var(--app-height);
-    background: radial-gradient(circle at top left, rgba(249, 115, 22, 0.16), transparent 32%), var(--bg-main);
+    background:
+        radial-gradient(circle at top left, rgba(249, 115, 22, 0.22), transparent 34%),
+        radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.16), transparent 28%),
+        var(--bg-main);
     color: var(--text-main);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -471,11 +468,11 @@ textarea:focus-visible {
 }
 
 .shell {
-    max-width: 1200px;
+    max-width: 1280px;
     margin: 0 auto;
-    padding: var(--space-lg);
+    padding: clamp(16px, 3vw, 32px);
     display: grid;
-    gap: var(--space-md);
+    gap: 20px;
 }
 
 .hero-card,
@@ -489,11 +486,54 @@ textarea:focus-visible {
 .auth-card,
 .toast,
 .empty-state {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015));
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-main);
-    box-shadow: var(--shadow-card);
+    position: relative;
+    overflow: hidden;
+    backdrop-filter: blur(18px);
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.025));
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 24px;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.06);
     min-width: 0;
+}
+
+.hero-card::before,
+.panel-card::before,
+.auth-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at top left, rgba(249, 115, 22, 0.16), transparent 35%), radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.16), transparent 30%);
+    pointer-events: none;
+}
+
+.hero-card {
+    padding: clamp(20px, 3vw, 32px);
+}
+
+.auth-card {
+    width: min(100%, 500px);
+    padding: clamp(24px, 4vw, 36px);
+    display: grid;
+    gap: var(--space-md);
+}
+
+.auth-card h1,
+.auth-card h2 {
+    font-size: clamp(24px, 4vw, 32px);
+    letter-spacing: -0.02em;
+}
+
+.auth-screen {
+    min-height: 100dvh;
+    display: grid;
+    place-items: center;
+    padding: clamp(16px, 3vw, 24px);
+}
+
+.primary-btn,
+.secondary-btn,
+.ghost-btn {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14);
 }
 
 .priority-badge {
@@ -544,7 +584,57 @@ textarea:focus-visible {
     justify-content: space-between;
     align-items: center;
     gap: var(--space-lg);
-    padding: var(--space-xl);
+    padding: clamp(24px, 3vw, 36px);
+}
+
+.hero-spotlight {
+    align-items: flex-start;
+    gap: clamp(20px, 3vw, 32px);
+}
+
+.hero-copy {
+    display: grid;
+    gap: 12px;
+    max-width: 680px;
+}
+
+.hero-copy h1 {
+    font-size: clamp(28px, 4vw, 44px);
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+}
+
+.hero-copy p {
+    color: var(--text-muted);
+    font-size: 15px;
+    line-height: 1.7;
+    max-width: 620px;
+}
+
+.hero-highlights {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-content: flex-start;
+    justify-content: flex-end;
+}
+
+.highlight-pill {
+    padding: 10px 14px;
+    border-radius: var(--radius-pill);
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-main);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.hero-card:hover,
+.panel-card:hover,
+.auth-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 24px 50px rgba(0, 0, 0, 0.3);
 }
 
 .hero-card h3,
@@ -658,6 +748,14 @@ textarea:focus-visible {
         align-items: flex-start;
     }
 
+    .hero-copy {
+        width: 100%;
+    }
+
+    .hero-highlights {
+        justify-content: flex-start;
+    }
+
     .hero-actions,
     .action-row {
         flex-direction: column;
@@ -669,6 +767,37 @@ textarea:focus-visible {
     }
 
     .auth-form {
+        width: 100%;
+    }
+}
+
+@media (max-width: 640px) {
+    .shell {
+        padding: 14px;
+    }
+
+    .hero-card {
+        padding: 18px;
+        border-radius: 20px;
+    }
+
+    .hero-copy h1 {
+        font-size: 24px;
+    }
+
+    .hero-highlights {
+        gap: 8px;
+    }
+
+    .highlight-pill {
+        width: 100%;
+        justify-content: center;
+        text-align: center;
+    }
+
+    .primary-btn,
+    .secondary-btn,
+    .ghost-btn {
         width: 100%;
     }
 }
@@ -818,12 +947,13 @@ input,
 select,
 textarea {
     width: 100%;
-    padding: var(--space-md);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-main);
-    background: var(--bg-input);
+    padding: 12px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.05);
     color: var(--text-main);
-    transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast), background var(--transition-fast);
 }
 
 .password-input-wrap {
@@ -933,8 +1063,9 @@ textarea::placeholder {
 input:focus,
 select:focus,
 textarea:focus {
-    border-color: var(--accent);
+    border-color: rgba(249, 115, 22, 0.9);
     box-shadow: 0 0 0 3px var(--accent-glow);
+    background: rgba(255, 255, 255, 0.08);
 }
 
 select {
@@ -960,6 +1091,7 @@ select {
     padding: 10px 16px;
     font-size: 14px;
     font-weight: 600;
+    letter-spacing: 0.01em;
     transition: transform 180ms cubic-bezier(.2, .8, .2, 1), background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, filter 180ms ease;
     will-change: transform, box-shadow;
     position: relative;
@@ -993,14 +1125,14 @@ select {
 .btn-primary {
     background: linear-gradient(135deg, var(--accent), var(--accent-hover));
     color: white;
-    box-shadow: 0 4px 15px rgba(249, 115, 22, 0.3);
+    box-shadow: 0 8px 24px rgba(249, 115, 22, 0.25);
 }
 
 .primary-btn:hover,
 .btn-primary:hover {
     transform: translateY(-2px) scale(1.01);
     background: linear-gradient(135deg, var(--accent-hover), var(--accent));
-    box-shadow: 0 10px 30px rgba(249, 115, 22, 0.45);
+    box-shadow: 0 14px 34px rgba(249, 115, 22, 0.38);
 }
 
 .primary-btn:active,
@@ -1066,7 +1198,45 @@ select {
 .auth-message,
 .message {
     color: var(--text-muted);
-    min-height: 20px;
+    min-height: 24px;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.auth-message::before {
+    content: '•';
+    color: var(--text-muted);
+    font-size: 16px;
+}
+
+.auth-message-success {
+    color: #bbf7d0;
+}
+
+.auth-message-success::before {
+    content: '✓';
+    color: #4ade80;
+}
+
+.auth-message-error {
+    color: #fecaca;
+}
+
+.auth-message-error::before {
+    content: '!';
+    color: #f87171;
+}
+
+.auth-message-info {
+    color: var(--text-muted);
+}
+
+.auth-message-info::before {
+    content: '•';
+    color: var(--accent);
 }
 
 .app-shell {
@@ -2918,58 +3088,6 @@ button.disabled {
 .toast-close:hover {
     background: var(--bg-input);
     color: var(--text-main);
-}
-
-.push-permission-banner {
-    position: fixed;
-    left: 16px;
-    right: 16px;
-    bottom: 24px;
-    z-index: 2000;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 16px 20px;
-    border-radius: 18px;
-    background: rgba(12, 24, 46, 0.96);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.22);
-    backdrop-filter: blur(18px);
-    color: #fff;
-    animation: slideIn 240ms ease-out;
-}
-
-.push-permission-banner .push-permission-content {
-    flex: 1 1 auto;
-    min-width: 0;
-}
-
-.push-permission-banner .push-permission-content strong {
-    display: block;
-    font-size: 0.98rem;
-    margin-bottom: 6px;
-}
-
-.push-permission-banner .push-permission-content p {
-    margin: 0;
-    line-height: 1.45;
-    color: rgba(255, 255, 255, 0.82);
-    font-size: 0.93rem;
-}
-
-.push-permission-banner .push-permission-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    align-items: center;
-    justify-content: flex-end;
-    min-width: 180px;
-}
-
-.push-permission-banner .primary-btn,
-.push-permission-banner .ghost-btn {
-    min-width: 120px;
 }
 
 .bottom-nav {

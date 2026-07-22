@@ -1,6 +1,5 @@
 import { initFirebase, clearStoredAuthState } from './firebase-config.js';
 import { formatCurrency, formatDate, createToast } from './utils.js';
-import { initializePushForUser } from './push-notifications.js';
 import { getQRCardHTML, initQRCode, bindQRDownloadHandlers } from './qr-utils.js';
 
 const state = {
@@ -440,7 +439,6 @@ async function handleAuthStateChange(user) {
         }
         state.authUser = user;
         state.profile = profile;
-        await initializePushForUser(user, firestore, { showToast: createToast });
         elements.authScreen.classList.add('hidden');
         elements.appShell.classList.remove('hidden');
         showSection(state.activeSection);

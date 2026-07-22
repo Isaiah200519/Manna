@@ -1,6 +1,5 @@
 import { initFirebase, clearStoredAuthState } from './firebase-config.js';
 import { formatCurrency, formatDate, createToast, getImageUrl, getAddonImageUrl, getRestaurantImageUrl, calculateDistance, copyText, dialUSSD, getCommunityOptions, escapeHtml } from './utils.js';
-import { initializePushForUser } from './push-notifications.js';
 import { DEFAULT_CATEGORY_TAXONOMY, getCategoryDisplayName, getCategoryOptions } from './category-taxonomy.js';
 import { getQRCardHTML, initQRCode, bindQRDownloadHandlers } from './qr-utils.js';
 import { resolveRestaurantPaymentDetails } from './checkout-utils.mjs';
@@ -646,7 +645,6 @@ async function handleAuthStateChange(user) {
             return;
         }
         state.customerProfile = profile;
-        await initializePushForUser(user, firestore, { showToast: createToast });
         authScreen.classList.add('hidden');
         appShell.classList.remove('hidden');
         await loadCustomerData();
@@ -1432,6 +1430,10 @@ function renderLocationPicker() {
     document.getElementById('stopTrackingButton')?.addEventListener('click', stopLiveLocationTracking);
     document.querySelectorAll('[data-select-location]').forEach((button) => button.addEventListener('click', () => selectSavedLocation(button.dataset.selectLocation)));
     initLocationPickerMap('locationMap', 'locationStatus');
+}
+
+function escapeHtml(value) {
+    return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function initLocationPickerMap(containerId = 'locationMap', statusElementId = 'locationStatus') {

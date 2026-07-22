@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>MANNA Platform • Launch Portal</title>
     <meta name="theme-color" content="#0d2045" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -18,23 +18,25 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-messaging-compat.js"></script>
 </head>
 
 <body>
     <div class="shell">
-        <header class="hero-card">
-            <div class="brand-block">
-                <img src="./images/logo/logo.svg" alt="MANNA logo" class="brand-logo"
-                    onerror="this.classList.add('hidden');this.nextElementSibling.classList.remove('hidden');" />
-                <div class="brand-fallback hidden">M</div>
+        <header class="hero-card hero-spotlight">
+            <div class="hero-copy">
+                <div class="eyebrow">Premium delivery platform</div>
+                <h1>Launch the future of food commerce with MANNA.</h1>
+                <p>Experience a refined, high-performance multi-role experience for customers, restaurants, delivery
+                    partners, and admins.</p>
+                <div class="hero-actions">
+                    <button id="seedButton" class="primary-btn">Seed demo data</button>
+                    <a href="./admin.html" class="ghost-btn">Open admin</a>
+                </div>
             </div>
-            <div class="action-row">
-                <button id="seedButton" class="primary-btn">Seed demo data</button>
-                <a href="./admin.html" class="ghost-btn">Open admin</a>
-                <a href="./restaurant.html" class="ghost-btn">Open restaurant</a>
-                <a href="./customer.html" class="ghost-btn">Open customer</a>
-                <a href="./delivery.html" class="ghost-btn">Open delivery</a>
+            <div class="hero-highlights" aria-label="Platform highlights">
+                <div class="highlight-pill">Live dashboards</div>
+                <div class="highlight-pill">Smart routing</div>
+                <div class="highlight-pill">Premium marketplace</div>
             </div>
         </header>
 

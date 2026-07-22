@@ -1,6 +1,4 @@
 import { initFirebase } from './firebase-config.js';
-import { createToast } from './utils.js';
-import { initializePushForUser } from './push-notifications.js';
 
 export function setupAuthRouter(options = {}) {
     const { onRoleResolved } = options;
@@ -25,6 +23,8 @@ export function setupAuthRouter(options = {}) {
     const loginForm = document.getElementById('loginForm');
     const registerForm = document.getElementById('registerForm');
     const authMessage = document.getElementById('authMessage');
+    const loginSubmitButton = loginForm?.querySelector('button[type="submit"]');
+    const registerSubmitButton = registerForm?.querySelector('button[type="submit"]');
     const showRegisterButton = document.getElementById('showRegisterButton');
     const showLoginButton = document.getElementById('showLoginButton');
     const seedButton = document.getElementById('seedButton');
@@ -60,9 +60,22 @@ export function setupAuthRouter(options = {}) {
 
     if (!loginForm || !registerForm || !auth || !firestore) return;
 
-    function setAuthMessage(message) {
-        if (authMessage) {
-            authMessage.textContent = message;
+    function setAuthMessage(message, tone = 'info') {
+        if (!authMessage) return;
+        authMessage.textContent = message;
+        authMessage.classList.remove('auth-message-success', 'auth-message-error', 'auth-message-info');
+        authMessage.classList.add(`auth-message-${tone}`);
+    }
+
+    function setSubmitButtonState(button, isPending, label) {
+        if (!button) return;
+        button.disabled = isPending;
+        button.textContent = isPending ? 'Signing in...' : label;
+    }
+
+    function redirectAfterAuth(role) {
+        if (typeof onRoleResolved === 'function') {
+            window.setTimeout(() => onRoleResolved(role), 900);
         }
     }
 
@@ -217,16 +230,20 @@ export function setupAuthRouter(options = {}) {
         const email = document.getElementById('loginEmail').value.trim();
         const password = document.getElementById('loginPassword').value;
         if (!email || !password) {
-            setAuthMessage('Please enter both email and password.');
+            setAuthMessage('Please enter both email and password.', 'error');
             return;
         }
-        setAuthMessage('Signing you in...');
+        setSubmitButtonState(loginSubmitButton, true, 'Sign In');
+        setAuthMessage('Signing you in...', 'info');
         shouldRedirectAfterAuth = true;
         try {
             await auth.signInWithEmailAndPassword(email, password);
+            setAuthMessage('Signed in successfully. Redirecting to your workspace...', 'success');
+            setSubmitButtonState(loginSubmitButton, false, 'Signed in ✓');
         } catch (error) {
             shouldRedirectAfterAuth = false;
-            setAuthMessage(error.message);
+            setAuthMessage(error.message, 'error');
+            setSubmitButtonState(loginSubmitButton, false, 'Sign In');
         }
     });
 
@@ -237,20 +254,23 @@ export function setupAuthRouter(options = {}) {
         const password = document.getElementById('registerPassword').value;
         const role = document.getElementById('registerRole').value;
         if (!name || !email || !password) {
-            setAuthMessage('Please complete the registration form.');
+            setAuthMessage('Please complete the registration form.', 'error');
             return;
         }
-        setAuthMessage('Creating your account...');
+        setSubmitButtonState(registerSubmitButton, true, 'Create Account');
+        setAuthMessage('Creating your account...', 'info');
         shouldRedirectAfterAuth = true;
         try {
             const result = await auth.createUserWithEmailAndPassword(email, password);
             const user = result.user;
             await user.updateProfile({ displayName: name });
             await persistUserProfile(user, role, name, 'Account created. Signing you in...');
-            setAuthMessage('Account created. Signing you in...');
+            setAuthMessage('Account created. Signing you in...', 'success');
+            setSubmitButtonState(registerSubmitButton, false, 'Signed in ✓');
         } catch (error) {
             shouldRedirectAfterAuth = false;
-            setAuthMessage(error.message);
+            setAuthMessage(error.message, 'error');
+            setSubmitButtonState(registerSubmitButton, false, 'Create Account');
         }
     });
 
@@ -327,9 +347,9 @@ export function setupAuthRouter(options = {}) {
             const doc = await firestore.collection('users').doc(user.uid).get();
             const profile = doc.exists ? doc.data() : null;
             const role = profile?.role || 'customer';
-            await initializePushForUser(user, firestore, { showToast: createToast });
-            if (typeof onRoleResolved === 'function') {
-                onRoleResolved(role);
+            if (shouldRedirectForSession) {
+                setAuthMessage('Signed in successfully. Redirecting to your workspace...', 'success');
+                redirectAfterAuth(role);
             }
         } catch (error) {
             setAuthMessage(error.message);

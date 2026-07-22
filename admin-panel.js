@@ -1,6 +1,5 @@
 import { initFirebase, isFirebaseReady, subscribeCollection, addDocument, updateDocument, deleteDocument, saveDocument, clearStoredAuthState } from './firebase-config.js';
 import { formatCurrency, formatDate, escapeHtml, getInitials, createToast, confirmDialog, getImageUrl, getAddonImageUrl, getRestaurantImageUrl, slugify } from './utils.js';
-import { initializePushForUser } from './push-notifications.js';
 import { DEFAULT_CATEGORY_TAXONOMY, getCategoryDisplayName, getCategoryOptions } from './category-taxonomy.js';
 import { getQRCardHTML, initQRCode, bindQRDownloadHandlers } from './qr-utils.js';
 
