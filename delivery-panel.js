@@ -12,6 +12,8 @@ const state = {
     supportRequests: [],
     chatMessages: [],
     helpArticles: [],
+    payoutPreferences: {},
+    financialPayouts: [],
     selectedOrder: null,
     activeSection: 'dashboard',
     pendingClaimOrderIds: new Set(),
@@ -62,6 +64,7 @@ let firebase = null;
 let firestore = null;
 let auth = null;
 let authBootstrapTimer = null;
+let payoutListenerUnsubscribe = null;
 
 function clearAuthBootstrapTimer() {
     if (authBootstrapTimer) {
@@ -770,6 +773,17 @@ function renderSettings() {
         <button class="primary-btn" data-action="change-password">Change Password</button>
         <button class="danger-btn" data-action="deactivate-account">Deactivate Account</button>
       </div>
+    </div>
+    <div class="item-card">
+      <div class="panel-card-header"><strong>Payment preferences</strong></div>
+      <label>Mobile money number<input id="payoutPhone" value="${state.payoutPreferences?.paymentPhone || ''}" /></label>
+      <label>Provider<select id="payoutProvider">
+        <option value="orange" ${state.payoutPreferences?.provider === 'orange' ? 'selected' : ''}>Orange Money</option>
+        <option value="lonestar" ${state.payoutPreferences?.provider === 'lonestar' ? 'selected' : ''}>Lonestar</option>
+      </select></label>
+      <div class="action-row">
+        <button class="primary-btn" id="savePayoutPreferences">Save payment preferences</button>
+      </div>
     </div>`;
     const availabilityToggle = document.getElementById('availabilityToggle');
     if (availabilityToggle) {
@@ -778,6 +792,13 @@ function renderSettings() {
             createToast(availabilityToggle.checked ? 'You are online for new deliveries.' : 'You are offline for now.', 'success');
         });
     }
+    document.getElementById('savePayoutPreferences')?.addEventListener('click', async () => {
+        const paymentPhone = document.getElementById('payoutPhone').value.trim();
+        const provider = document.getElementById('payoutProvider').value;
+        await firestore.collection('users').doc(state.authUser.uid).set({ payoutPreferences: { provider, paymentPhone }, updatedAt: new Date() }, { merge: true });
+        state.payoutPreferences = { provider, paymentPhone };
+        createToast('Payment preferences saved.', 'success');
+    });
 }
 
 function renderNotifications() {
@@ -822,6 +843,9 @@ function showSection(section) {
     document.querySelectorAll('.section-panel').forEach((panel) => panel.classList.toggle('active', panel.id === `${section}Section`));
     if (section === 'help') {
         renderHelpSession();
+    }
+    if (section === 'settings') {
+        renderSettings();
     }
     const titleMap = {
         dashboard: ['Dashboard', 'Pick up, deliver, and keep your route moving.', 'Delivery Console', 'Dashboard / Overview'],

@@ -1,5 +1,5 @@
 import { initFirebase, clearStoredAuthState } from './firebase-config.js';
-import { formatCurrency, formatDate, createToast, getImageUrl, getAddonImageUrl, getRestaurantImageUrl, calculateDistance, copyText, dialUSSD } from './utils.js';
+import { formatCurrency, formatDate, createToast, getImageUrl, getAddonImageUrl, getRestaurantImageUrl, calculateDistance, copyText, dialUSSD, getCommunityOptions, escapeHtml } from './utils.js';
 import { DEFAULT_CATEGORY_TAXONOMY, getCategoryDisplayName, getCategoryOptions } from './category-taxonomy.js';
 import { getQRCardHTML, initQRCode, bindQRDownloadHandlers } from './qr-utils.js';
 import { resolveRestaurantPaymentDetails } from './checkout-utils.mjs';
@@ -31,7 +31,7 @@ const state = {
     selectedRestaurant: null,
     selectedMenuItem: null,
     searchQuery: '',
-    filters: { category: 'all', sort: 'rating' },
+    filters: { category: 'all', sort: 'rating', community: '' },
     orderFilter: 'all',
     deliveryFee: 60,
     notifications: [],
@@ -264,6 +264,7 @@ function resolvePasswordResetEmail(fallbackEmail = '') {
 }
 
 function init() {
+    loadRestaurantFilterPreferences();
     bindEvents();
     firebase = initFirebase();
     auth = firebase.auth;
@@ -380,6 +381,7 @@ function bindEvents() {
         state.filters.sort = event.target.value;
         renderRestaurants();
     });
+    document.getElementById('restaurantCommunityFilterButton')?.addEventListener('click', openCommunityFilterModal);
     document.getElementById('orderFilter')?.addEventListener('change', (event) => {
         state.orderFilter = event.target.value;
         renderOrders();
@@ -947,12 +949,57 @@ function renderHome() {
     document.querySelectorAll('[data-favorite-item]').forEach((button) => button.addEventListener('click', () => toggleFavoriteItem(button.dataset.favoriteItem)));
 }
 
+function saveRestaurantFilterPreferences() {
+    sessionStorage.setItem('manna-customer-community-filter', state.filters.community || '');
+}
+
+function loadRestaurantFilterPreferences() {
+    const savedCommunity = sessionStorage.getItem('manna-customer-community-filter') || '';
+    if (savedCommunity) {
+        state.filters.community = savedCommunity;
+    }
+}
+
+function openCommunityFilterModal() {
+    const options = getCommunityOptions().map((community) => `<option value="${escapeHtml(community.toLowerCase())}" ${state.filters.community?.toLowerCase() === community.toLowerCase() ? 'selected' : ''}>${escapeHtml(community)}</option>`).join('');
+    modalTitle.textContent = 'Filter by community';
+    modalBody.innerHTML = `
+      <div class="stack">
+        <label>Community<select id="communityFilterSelect">
+          <option value="">All communities</option>
+          ${options}
+        </select></label>
+      </div>`;
+    modalActions.innerHTML = `
+      <button class="ghost-btn" id="clearCommunityFilterButton" type="button">Clear</button>
+      <button class="primary-btn" id="applyCommunityFilterButton" type="button">Apply</button>
+    `;
+    modalBackdrop.classList.remove('hidden');
+    modalBackdrop.setAttribute('aria-hidden', 'false');
+    document.getElementById('applyCommunityFilterButton')?.addEventListener('click', () => {
+        const select = document.getElementById('communityFilterSelect');
+        state.filters.community = select?.value || '';
+        saveRestaurantFilterPreferences();
+        renderRestaurants();
+        closeModal();
+    });
+    document.getElementById('clearCommunityFilterButton')?.addEventListener('click', () => {
+        state.filters.community = '';
+        saveRestaurantFilterPreferences();
+        renderRestaurants();
+        closeModal();
+    });
+    window.addEventListener('keydown', handleModalEscape);
+}
+
 function renderRestaurants() {
     const filtered = state.restaurants.filter((restaurant) => {
         const search = state.searchQuery || '';
         const matchesSearch = !search || `${restaurant.name} ${restaurant.description || ''}`.toLowerCase().includes(search);
         const matchesCategory = state.filters.category === 'all' || getCategoryDisplayName(restaurant.category) === state.filters.category || state.menuItems.some((item) => item.restaurantId === restaurant.id && getCategoryDisplayName(item.category) === state.filters.category);
-        return matchesSearch && matchesCategory;
+        const communityValue = String(state.filters.community || '').trim().toLowerCase();
+        const matchesCommunity = !communityValue || String(restaurant.community || restaurant.district || restaurant.county || '').trim().toLowerCase() === communityValue;
+        return matchesSearch && matchesCategory && matchesCommunity;
     }).sort((a, b) => {
         if (state.filters.sort === 'distance') return (a.distance || 0) - (b.distance || 0);
         if (state.filters.sort === 'newest') return Number(b.createdAt?.seconds || 0) - Number(a.createdAt?.seconds || 0);
@@ -964,6 +1011,8 @@ function renderRestaurants() {
       <img src="${getRestaurantImageUrl(restaurant)}" alt="${restaurant.name}" onerror="this.src='./images/placeholder.png'" />
       <div class="panel-card-header"><strong>${restaurant.name}</strong><span class="badge">${getCategoryDisplayName(restaurant.category || 'Food')}</span></div>
       <div class="muted card-description">${restaurant.description || 'Local favorites and hearty meals.'}</div>
+      ${restaurant.phone ? `<div class="muted">📞 ${escapeHtml(restaurant.phone)}</div>` : ''}
+      ${restaurant.community || restaurant.district || restaurant.county ? `<div class="muted">📍 ${escapeHtml([restaurant.community, restaurant.district, restaurant.county].filter(Boolean).join(' • '))}</div>` : ''}
       <div class="modal-actions">
         <button class="primary-btn" data-open-restaurant="${restaurant.id}">View Menu</button>
         <button class="${getFavoriteButtonClass(isFavoriteRestaurant(restaurant.id))}" data-favorite-restaurant="${restaurant.id}" aria-pressed="${isFavoriteRestaurant(restaurant.id) ? 'true' : 'false'}">${getFavoriteIcon(isFavoriteRestaurant(restaurant.id))}</button>
@@ -1025,6 +1074,7 @@ function renderOrders() {
         <button class="ghost-btn" data-track-order="${order.id}" ${actionsDisabled ? 'disabled' : ''}>Track</button>
         <button class="ghost-btn" data-repeat-order="${order.id}" ${actionsDisabled ? 'disabled' : ''}>Repeat</button>
         <button class="ghost-btn" data-request-refund="${order.id}" ${canRequestRefund(order) && !isArchived ? '' : 'disabled'}>${getRefundButtonLabel(order)}</button>
+        ${order.refundStatus === 'approved' && !order.refundConfirmedAt ? `<button class="primary-btn" data-confirm-refund="${order.id}">Confirm receipt</button>` : ''}
         ${canDelete ? `<button class="danger-btn" data-delete-order="${order.id}">Delete</button>` : ''}
       </div>
     </div>`;
@@ -1032,6 +1082,7 @@ function renderOrders() {
     document.querySelectorAll('[data-track-order]').forEach((button) => button.addEventListener('click', () => trackOrder(button.dataset.trackOrder)));
     document.querySelectorAll('[data-repeat-order]').forEach((button) => button.addEventListener('click', () => repeatOrder(button.dataset.repeatOrder)));
     document.querySelectorAll('[data-request-refund]').forEach((button) => button.addEventListener('click', () => requestRefund(button.dataset.requestRefund)));
+    document.querySelectorAll('[data-confirm-refund]').forEach((button) => button.addEventListener('click', () => confirmRefundReceipt(button.dataset.confirmRefund)));
     document.querySelectorAll('[data-delete-order]').forEach((button) => button.addEventListener('click', () => deleteOrderFromUI(button.dataset.deleteOrder)));
 }
 
@@ -1043,17 +1094,58 @@ function getRefundButtonLabel(order) {
     if (order.refundStatus === 'requested') return 'Refund pending';
     if (order.refundStatus === 'approved') return 'Refund approved';
     if (order.refundStatus === 'rejected') return 'Refund rejected';
+    if (order.refundStatus === 'confirmed') return 'Refund confirmed';
     return 'Request refund';
 }
 
 async function requestRefund(orderId) {
     const order = state.orders.find((entry) => entry.id === orderId);
     if (!order || !canRequestRefund(order)) return;
+    const reason = window.prompt('Tell us why you want a refund (optional)', 'Order issue');
     try {
-        await firestore.collection('orders').doc(orderId).update({ refundRequested: true, refundStatus: 'requested', updatedAt: new Date() });
+        await firestore.collection('orders').doc(orderId).update({
+            refundRequested: true,
+            refundStatus: 'requested',
+            refundReason: (reason || '').trim(),
+            refundAmount: Number(order.refundAmount || order.total || 0),
+            refundRequestedAt: new Date(),
+            refundProcessedAt: null,
+            refundConfirmedAt: null,
+            status: 'refund_requested',
+            updatedAt: new Date()
+        });
+        await firestore.collection('notifications').add({
+            recipientUid: state.authUser?.uid || order.customerUid,
+            title: 'Refund request submitted',
+            message: `Your refund request for order #${order.orderNumber || order.id.slice(0, 6)} is now pending review.`,
+            type: 'refund',
+            read: false,
+            isDeleted: false,
+            createdAt: new Date()
+        });
+        await loadOrders(state.authUser.uid);
+        renderOrders();
         createToast('Refund request sent to the restaurant.', 'success');
     } catch (error) {
         createToast(error.message, 'error');
+    }
+}
+
+async function confirmRefundReceipt(orderId) {
+    const order = state.orders.find((entry) => entry.id === orderId);
+    if (!order || order.refundStatus !== 'approved') return;
+    try {
+        await firestore.collection('orders').doc(orderId).update({
+            refundStatus: 'confirmed',
+            refundConfirmedAt: new Date(),
+            status: 'refunded',
+            updatedAt: new Date()
+        });
+        await loadOrders(state.authUser.uid);
+        renderOrders();
+        createToast('Refund receipt confirmed.', 'success');
+    } catch (error) {
+        createToast(error.message || 'Unable to confirm the refund receipt.', 'error');
     }
 }
 
@@ -2033,6 +2125,7 @@ function renderCheckout() {
         <p><strong>Total:</strong> ${formatCurrency(total)}</p>
         <div class="muted">Payment receiver: ${escapeHtml(paymentReceiverLabel)}</div>
         <div class="muted">Accepted methods: ${escapeHtml(acceptedMethodsLabel)}</div>
+        ${restaurant?.phone ? `<div class="muted">Restaurant phone: ${escapeHtml(restaurant.phone)}</div>` : ''}
       </div>
       <div class="item-card">
         <div class="panel-card-header">
@@ -2428,7 +2521,13 @@ async function placeOrder() {
         updatedAt: new Date(),
         isDeleted: false,
         refundStatus: 'none',
-        refundRequested: false
+        refundRequested: false,
+        refundRequestedAt: null,
+        refundProcessedAt: null,
+        refundConfirmedAt: null,
+        refundAmount: 0,
+        refundReason: '',
+        refundRejectedReason: ''
     };
     try {
         await firestore.collection('orders').add(orderPayload);

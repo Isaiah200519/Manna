@@ -456,17 +456,23 @@
                         <h3>Store Analytics</h3>
                         <span class="badge">Live insights</span>
                     </div>
+                    <div class="toolbar" style="margin-bottom: 12px;">
+                        <label>From<input id="analyticsStartDate" type="date" /></label>
+                        <label>To<input id="analyticsEndDate" type="date" /></label>
+                        <button class="ghost-btn" type="button" id="analyticsApplyRangeButton">Apply</button>
+                    </div>
                     <div id="analyticsSummary" class="stats-grid"></div>
                     <div class="content-grid analytics-grid">
                         <div class="panel-card inset-card">
-                            <h4>Revenue Trend</h4>
+                            <h4>Recent revenue</h4>
                             <div id="revenueChart" class="chart"></div>
                         </div>
                         <div class="panel-card inset-card">
-                            <h4>Top Products</h4>
+                            <h4>Top products</h4>
                             <div id="productChart" class="chart"></div>
                         </div>
                     </div>
+                    <div id="analyticsInsights" class="stack"></div>
                 </div>
             </section>
 

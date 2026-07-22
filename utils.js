@@ -1,3 +1,46 @@
+export const COMMUNITY_OPTIONS = [
+    'Central Monrovia',
+    'Sinkor',
+    'Paynesville',
+    'Brewerville',
+    'Kakata',
+    'Buchanan',
+    'Gbarnga',
+    'Harbel',
+    'Bensonville',
+    'Robertsport',
+    'Zwedru',
+    'Gbanzon',
+    'Clay-Ashland'
+];
+
+export function getCommunityOptions() {
+    return COMMUNITY_OPTIONS;
+}
+
+export function parseDateInput(value) {
+    if (!value) return null;
+    const parsed = new Date(`${value}T00:00:00`);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+export function isDateInRange(value, startDate, endDate) {
+    if (!value) return false;
+    const date = value.toDate ? value.toDate() : new Date(value);
+    if (!Number.isFinite(date.getTime())) return false;
+    if (startDate) {
+        const start = startDate.toDate ? startDate.toDate() : new Date(startDate);
+        const startBoundary = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0, 0);
+        if (date < startBoundary) return false;
+    }
+    if (endDate) {
+        const end = endDate.toDate ? endDate.toDate() : new Date(endDate);
+        const endBoundary = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999);
+        if (date > endBoundary) return false;
+    }
+    return true;
+}
+
 export function formatCurrency(value) {
     return `L$${Number(value || 0).toLocaleString('en-LR')}`;
 }

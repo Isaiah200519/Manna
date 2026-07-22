@@ -19,6 +19,8 @@ const state = {
     announcements: [],
     notifications: [],
     supportRequests: [],
+    financialPayouts: [],
+    platformFeePayments: [],
     settings: {},
     logs: []
   },
@@ -128,6 +130,8 @@ function seedData() {
     theme: 'dark',
     supportEmail: 'support@manna.app',
     supportPhone: '+231-555-1234',
+    platformFeeType: 'percentage',
+    platformFeeValue: 8,
     maintenanceMode: false
   };
 
@@ -536,6 +540,7 @@ function openSection(section) {
     notifications: 'Notifications',
     settings: 'Settings',
     logs: 'System Logs',
+    financials: 'Financial Settlements',
     help: 'Help Center'
   };
   pageTitle.textContent = titles[section] || 'Overview';
@@ -586,6 +591,9 @@ function renderSection(section) {
       break;
     case 'logs':
       renderLogs();
+      break;
+    case 'financials':
+      renderFinancials();
       break;
     case 'help':
       renderHelpCenter();
@@ -787,7 +795,10 @@ function buildAnalyticsSnapshot() {
   });
 
   const completed = windowOrders.filter((order) => ['completed', 'delivered', 'received'].includes(order.status));
-  const refunded = windowOrders.filter((order) => ['refunded', 'approved'].includes(order.refundStatus) || order.refundRequested);
+  const refunded = windowOrders.filter((order) => {
+    const refundStatus = String(order.refundStatus || '').toLowerCase();
+    return ['requested', 'approved', 'rejected', 'confirmed', 'processed'].includes(refundStatus) || order.refundRequested || ['refund_approved', 'refunded'].includes(order.status);
+  });
   const revenue = completed.reduce((sum, order) => sum + Number(order.total || 0), 0);
   const refunds = refunded.reduce((sum, order) => sum + Number(order.refundAmount || order.total || 0), 0);
   const netCashflow = revenue - refunds;
@@ -1906,7 +1917,7 @@ function renderOrders() {
                 <td><span class="badge-status ${order.status === 'completed' || order.status === 'delivered' ? 'active' : 'pending'}">${escapeHtml(order.status || 'pending')}</span></td>
                 <td>${escapeHtml(order.deliveryLocationLabel || 'Standard')}<div class="body-small">${escapeHtml(order.deliveryLandmark || order.deliveryDetails || 'No notes')}</div></td>
                 <td>${escapeHtml(order.paymentMethod || 'pending')}<div class="body-small">${escapeHtml(order.paymentDetails || '')}</div></td>
-                <td>${escapeHtml(order.refundStatus || 'none')}</td>
+                <td>${escapeHtml(order.refundStatus || 'none')}<div class="body-small">${escapeHtml(order.refundReason || '')}</div></td>
                 <td>${formatCurrency(order.total)}</td>
                 <td>${formatDate(order.createdAt)}<div class="body-small">ETA: ${order.estimatedDeliveryTime ? formatDate(order.estimatedDeliveryTime) : 'Pending'}</div></td>
               </tr>
@@ -2299,6 +2310,8 @@ function renderSettings() {
         <label>Tax (%)<input id="tax" type="number" value="${escapeHtml(settings.tax || 2)}" /></label>
         <label>Support Email<input id="supportEmail" value="${escapeHtml(settings.supportEmail || '')}" /></label>
         <label>Support Phone<input id="supportPhone" value="${escapeHtml(settings.supportPhone || '')}" /></label>
+        <label>Platform Fee Type<select id="platformFeeType"><option value="percentage" ${settings.platformFeeType === 'percentage' ? 'selected' : ''}>Percentage</option><option value="fixed" ${settings.platformFeeType === 'fixed' ? 'selected' : ''}>Fixed</option></select></label>
+        <label>Platform Fee Value<input id="platformFeeValue" type="number" value="${escapeHtml(settings.platformFeeValue || 8)}" /></label>
         <label>Maintenance Mode<select id="maintenanceMode"><option value="false" ${settings.maintenanceMode ? '' : 'selected'}>Off</option><option value="true" ${settings.maintenanceMode ? 'selected' : ''}>On</option></select></label>
         <div class="modal-actions full">
           <button class="primary-btn" id="saveSettings">Save Settings</button>
@@ -2320,13 +2333,18 @@ function renderSettings() {
       tax: Number(document.getElementById('tax').value || 0),
       supportEmail: document.getElementById('supportEmail').value,
       supportPhone: document.getElementById('supportPhone').value,
+      platformFeeType: document.getElementById('platformFeeType').value,
+      platformFeeValue: Number(document.getElementById('platformFeeValue').value || 0),
       maintenanceMode: document.getElementById('maintenanceMode').value === 'true'
     };
     persistData();
     try {
       const firebase = initFirebase();
       if (firebase?.db) {
-        await firebase.db.collection('settings').doc('platform').set(state.data.settings, { merge: true });
+        await Promise.all([
+          firebase.db.collection('adminSettings').doc('config').set(state.data.settings, { merge: true }),
+          firebase.db.collection('settings').doc('platform').set(state.data.settings, { merge: true })
+        ]);
       }
     } catch (error) {
       console.error(error);
@@ -2335,6 +2353,149 @@ function renderSettings() {
     state.data.logs.unshift({ id: Date.now().toString(), user: state.user.displayName, action: 'Update settings', details: 'Platform settings changed', createdAt: new Date().toISOString() });
     renderSettings();
   });
+}
+
+function renderFinancials() {
+  const payouts = (state.data.financialPayouts || []).slice().sort((first, second) => new Date(second.createdAt || 0) - new Date(first.createdAt || 0));
+  const fees = (state.data.platformFeePayments || []).slice().sort((first, second) => new Date(second.createdAt || 0) - new Date(first.createdAt || 0));
+  content.innerHTML = `
+    <section class="card">
+      <div class="card-header">
+        <div>
+          <h3 class="card-title">Financial Settlements</h3>
+          <p class="card-subtitle">Review delivery payouts and platform fee payments submitted by restaurants.</p>
+        </div>
+      </div>
+      <div class="stack">
+        <div class="panel-card">
+          <div class="panel-card-header">
+            <h4>Delivery payouts</h4>
+            <span class="badge">${payouts.filter((entry) => String(entry.status || 'pending').toLowerCase() === 'pending').length} pending</span>
+          </div>
+          <div class="list-stack">${payouts.length ? payouts.map((payout) => `
+            <div class="list-item">
+              <div class="panel-card-header">
+                <strong>${escapeHtml(payout.deliveryPersonName || payout.deliveryPersonUid || 'Delivery partner')}</strong>
+                <span class="badge">${escapeHtml(String(payout.status || 'pending').replace(/_/g, ' '))}</span>
+              </div>
+              <div class="muted">${escapeHtml(formatCurrency(payout.totalDeliveryFees || 0))} • ${escapeHtml(payout.restaurantName || payout.restaurantId || 'Restaurant')}</div>
+              <div class="muted">Reference: ${escapeHtml(payout.paymentReference || 'Waiting for restaurant upload')}</div>
+              ${payout.status === 'pending' ? `<div class="row-actions"><button class="primary-btn" data-settlement-action="confirm-payout" data-id="${escapeHtml(payout.id || '')}">Confirm payout</button><button class="ghost-btn" data-settlement-action="reject-payout" data-id="${escapeHtml(payout.id || '')}">Reject</button></div>` : ''}
+            </div>`).join('') : '<div class="empty-state">No payouts yet.</div>'}</div>
+        </div>
+        <div class="panel-card">
+          <div class="panel-card-header">
+            <h4>Platform fees</h4>
+            <span class="badge">${fees.filter((entry) => String(entry.status || 'pending').toLowerCase() === 'pending').length} pending</span>
+          </div>
+          <div class="list-stack">${fees.length ? fees.map((fee) => `
+            <div class="list-item">
+              <div class="panel-card-header">
+                <strong>${escapeHtml(formatCurrency(fee.feeAmount || 0))}</strong>
+                <span class="badge">${escapeHtml(String(fee.status || 'pending').replace(/_/g, ' '))}</span>
+              </div>
+              <div class="muted">${escapeHtml(fee.restaurantName || fee.restaurantId || 'Restaurant')} • ${escapeHtml(formatDate(fee.periodStart))} → ${escapeHtml(formatDate(fee.periodEnd))}</div>
+              <div class="muted">Reference: ${escapeHtml(fee.paymentReference || 'Waiting for restaurant upload')}</div>
+              ${fee.status === 'pending' ? `<div class="row-actions"><button class="primary-btn" data-settlement-action="confirm-fee" data-id="${escapeHtml(fee.id || '')}">Confirm fee</button><button class="ghost-btn" data-settlement-action="reject-fee" data-id="${escapeHtml(fee.id || '')}">Reject</button></div>` : ''}
+            </div>`).join('') : '<div class="empty-state">No platform fee payments yet.</div>'}</div>
+        </div>
+      </div>
+    </section>
+  `;
+  content.querySelectorAll('[data-settlement-action]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const action = button.getAttribute('data-settlement-action');
+      const id = button.getAttribute('data-id');
+      if (!id) return;
+      if (action === 'confirm-payout') {
+        await confirmPayout(id);
+      } else if (action === 'reject-payout') {
+        await rejectSettlement(id, 'deliveryPayouts');
+      } else if (action === 'confirm-fee') {
+        await confirmFee(id);
+      } else if (action === 'reject-fee') {
+        await rejectSettlement(id, 'platformFeePayments');
+      }
+    });
+  });
+}
+
+async function confirmPayout(id) {
+  const payout = (state.data.financialPayouts || []).find((entry) => entry.id === id);
+  if (!payout) return;
+  const paymentReference = window.prompt('Enter the payment reference', payout.paymentReference || '');
+  const payerPhone = window.prompt('Enter the payout phone number', payout.payerPhone || '');
+  const amountPaid = window.prompt('Enter the amount paid', String(payout.amountPaid || payout.totalDeliveryFees || 0));
+  if (!paymentReference || !payerPhone || !amountPaid) {
+    createToast('Please complete the payment details.', 'warning');
+    return;
+  }
+  try {
+    await updateDocument('deliveryPayouts', id, {
+      status: 'confirmed',
+      paymentReference: paymentReference.trim(),
+      payerPhone: payerPhone.trim(),
+      amountPaid: Number(amountPaid || 0),
+      updatedAt: new Date()
+    });
+    await addDocument('notifications', {
+      recipientUid: payout.deliveryPersonUid,
+      title: 'Payout confirmed',
+      message: `Your payout of ${formatCurrency(Number(amountPaid || 0))} was confirmed by the admin team.`,
+      type: 'payout',
+      read: false,
+      isDeleted: false,
+      createdAt: new Date()
+    });
+    createToast('Payout confirmed.', 'success');
+    renderFinancials();
+  } catch (error) {
+    createToast(error.message || 'Unable to confirm the payout.', 'error');
+  }
+}
+
+async function confirmFee(id) {
+  const fee = (state.data.platformFeePayments || []).find((entry) => entry.id === id);
+  if (!fee) return;
+  const paymentReference = window.prompt('Enter the payment reference', fee.paymentReference || '');
+  const payerPhone = window.prompt('Enter the payer phone number', fee.payerPhone || '');
+  const amountPaid = window.prompt('Enter the amount paid', String(fee.amountPaid || fee.feeAmount || 0));
+  if (!paymentReference || !payerPhone || !amountPaid) {
+    createToast('Please complete the fee payment details.', 'warning');
+    return;
+  }
+  try {
+    await updateDocument('platformFeePayments', id, {
+      status: 'confirmed',
+      paymentReference: paymentReference.trim(),
+      payerPhone: payerPhone.trim(),
+      amountPaid: Number(amountPaid || 0),
+      updatedAt: new Date()
+    });
+    await addDocument('notifications', {
+      recipientUid: fee.restaurantId ? fee.restaurantId : null,
+      title: 'Platform fee confirmed',
+      message: `Your platform fee payment of ${formatCurrency(Number(amountPaid || 0))} was confirmed by the admin team.`,
+      type: 'fee',
+      read: false,
+      isDeleted: false,
+      createdAt: new Date()
+    });
+    createToast('Fee payment confirmed.', 'success');
+    renderFinancials();
+  } catch (error) {
+    createToast(error.message || 'Unable to confirm the fee payment.', 'error');
+  }
+}
+
+async function rejectSettlement(id, collectionName) {
+  try {
+    await updateDocument(collectionName, id, { status: 'rejected', updatedAt: new Date() });
+    createToast('Settlement request marked as rejected.', 'warning');
+    renderFinancials();
+  } catch (error) {
+    createToast(error.message || 'Unable to update the settlement request.', 'error');
+  }
 }
 
 function renderHelpCenter() {
@@ -2425,7 +2586,10 @@ function renderHelpSuggestions() {
 }
 
 function getHelpArticleImage(article) {
-  return article.image ? `images/help-video-images/${article.image}` : 'images/placeholders/wrap.jpg';
+  const imageName = String(article?.image || '').trim();
+  if (!imageName) return 'images/placeholders/wrap.jpg';
+  const normalizedName = imageName.replace(/^.*[\\/]/, '');
+  return `images/help-images/${normalizedName}`;
 }
 
 function normalizeHelpArticleTags(value) {
@@ -2508,10 +2672,18 @@ function renderHelpArticleCards() {
 
 function openHelpArticleModal(article = null) {
   const isEditing = Boolean(article?.id);
+  const roleOptions = ['customer', 'restaurant', 'delivery', 'admin'];
+  let selectedRoles = Array.isArray(article?.targetRoles)
+    ? article.targetRoles.filter((role) => roleOptions.includes(String(role)))
+    : [];
+
   openModal(isEditing ? 'Edit Help Article' : 'Create Help Article', `
     <form id="helpArticleForm" class="form-grid" style="padding: 8px 0;">
       <label>Title<input name="title" value="${escapeHtml(article?.title || '')}" required /></label>
-      <label>Image<input name="image" value="${escapeHtml(article?.image || '')}" placeholder="help-image.jpg" /></label>
+      <label>Image<input id="helpArticleImageInput" name="image" value="${escapeHtml(article?.image || '')}" placeholder="help-image.jpg" /></label>
+      <div class="stack" style="grid-column: 1 / -1;">
+        <img id="helpArticleImagePreview" src="${escapeHtml(getHelpArticleImage(article))}" alt="Preview" style="display: ${article?.image ? 'block' : 'none'}; max-width: 200px; border-radius: 8px;" onerror="this.onerror=null; this.src='images/placeholders/wrap.jpg'; this.style.display='block';" />
+      </div>
       <label>Category<select name="category">
         <option value="" ${!article?.category ? 'selected' : ''}>Choose category</option>
         <option value="Getting started" ${article?.category === 'Getting started' ? 'selected' : ''}>Getting started</option>
@@ -2524,11 +2696,9 @@ function openHelpArticleModal(article = null) {
       <label>Tags<input name="tags" value="${escapeHtml((Array.isArray(article?.tags) ? article.tags : normalizeHelpArticleTags(article?.tags || '')).join(', '))}" placeholder="payments, onboarding, orders" /></label>
       <label><input type="checkbox" name="featured" ${article?.featured ? 'checked' : ''} /> Featured article</label>
       <label>Video URL<input name="videoUrl" value="${escapeHtml(article?.videoUrl || '')}" placeholder="https://..." /></label>
-      <label>Target roles<select name="targetRoles" multiple>
-        <option value="customer" ${((article?.targetRoles || []).includes('customer')) ? 'selected' : ''}>Customer</option>
-        <option value="restaurant" ${((article?.targetRoles || []).includes('restaurant')) ? 'selected' : ''}>Restaurant</option>
-        <option value="delivery" ${((article?.targetRoles || []).includes('delivery')) ? 'selected' : ''}>Delivery</option>
-      </select></label>
+      <div class="row-actions" style="grid-column: 1 / -1; gap: 12px; flex-wrap: wrap;">
+        ${roleOptions.map((role) => `<label><input class="help-role-checkbox" type="checkbox" value="${role}" ${selectedRoles.includes(role) ? 'checked' : ''} /> ${role.charAt(0).toUpperCase() + role.slice(1)}</label>`).join('')}
+      </div>
       <label class="full">Description<textarea name="description" required>${escapeHtml(article?.description || '')}</textarea></label>
       <div class="row-actions">
         <button class="primary-btn" id="submitHelpArticle" type="button">${isEditing ? 'Save changes' : 'Save article'}</button>
@@ -2536,10 +2706,39 @@ function openHelpArticleModal(article = null) {
       </div>
     </form>
   `);
+
+  const imageInput = document.getElementById('helpArticleImageInput');
+  const imagePreview = document.getElementById('helpArticleImagePreview');
+  const syncImagePreview = () => {
+    const imageValue = String(imageInput?.value || '').trim();
+    const filename = imageValue.replace(/^.*[\\/]/, '');
+    if (!filename) {
+      imagePreview.src = '';
+      imagePreview.style.display = 'none';
+      return;
+    }
+    imagePreview.src = `images/help-images/${filename}`;
+    imagePreview.style.display = 'block';
+  };
+
+  document.querySelectorAll('.help-role-checkbox').forEach((checkbox) => {
+    checkbox.addEventListener('change', (event) => {
+      const role = event.target.value;
+      if (event.target.checked) {
+        selectedRoles = Array.from(new Set([...selectedRoles, role]));
+      } else {
+        selectedRoles = selectedRoles.filter((value) => value !== role);
+      }
+    });
+  });
+
+  imageInput?.addEventListener('input', syncImagePreview);
+  imageInput?.addEventListener('change', syncImagePreview);
+  syncImagePreview();
+
   document.getElementById('submitHelpArticle').addEventListener('click', async () => {
     const form = document.getElementById('helpArticleForm');
     const data = new FormData(form);
-    const targetRoles = Array.from(form.querySelector('select[name="targetRoles"]').selectedOptions).map((option) => option.value);
     const payload = {
       title: String(data.get('title') || '').trim(),
       description: String(data.get('description') || '').trim(),
@@ -2548,7 +2747,7 @@ function openHelpArticleModal(article = null) {
       tags: normalizeHelpArticleTags(data.get('tags')),
       featured: Boolean(form.querySelector('input[name="featured"]').checked),
       videoUrl: String(data.get('videoUrl') || '').trim(),
-      targetRoles,
+      targetRoles: Array.from(new Set(selectedRoles)),
       updatedAt: new Date().toISOString()
     };
     if (!payload.title || !payload.description) {
@@ -3011,6 +3210,20 @@ function initializeFirebaseSync() {
   });
   subscribeCollection('supportRequests', (items) => {
     state.data.supportRequests = items.sort((first, second) => new Date(second.createdAt || 0) - new Date(first.createdAt || 0));
+    refreshDashboard();
+  });
+  subscribeCollection('deliveryPayouts', (items) => {
+    state.data.financialPayouts = items;
+    if (state.currentSection === 'financials') {
+      renderFinancials();
+    }
+    refreshDashboard();
+  });
+  subscribeCollection('platformFeePayments', (items) => {
+    state.data.platformFeePayments = items;
+    if (state.currentSection === 'financials') {
+      renderFinancials();
+    }
     refreshDashboard();
   });
   subscribeCollection('helpArticles', (items) => {

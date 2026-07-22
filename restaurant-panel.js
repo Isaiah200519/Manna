@@ -1,5 +1,5 @@
 import { initFirebase, clearStoredAuthState } from './firebase-config.js';
-import { formatCurrency, formatDate, escapeHtml, createToast, getImageUrl, getAddonImageUrl } from './utils.js';
+import { formatCurrency, formatDate, escapeHtml, createToast, getImageUrl, getAddonImageUrl, getCommunityOptions, isDateInRange } from './utils.js';
 import { DEFAULT_CATEGORY_TAXONOMY, getCategoryDisplayName, getCategoryOptions } from './category-taxonomy.js';
 import { getQRCardHTML, initQRCode, bindQRDownloadHandlers } from './qr-utils.js';
 
@@ -24,6 +24,8 @@ const state = {
     deliveryUsers: [],
     deliveryPartnerRequests: [],
     helpArticles: [],
+    financialPayouts: [],
+    platformFeePayments: [],
     activeSection: 'dashboard',
     viewMode: 'grid',
     activeOrderChatId: null,
@@ -72,6 +74,8 @@ let firestore = null;
 let auth = null;
 let approvalBanner = null;
 let authBootstrapTimer = null;
+let financialPayoutsUnsubscribe = null;
+let platformFeePaymentsUnsubscribe = null;
 
 function clearAuthBootstrapTimer() {
     if (authBootstrapTimer) {
@@ -91,6 +95,62 @@ function scheduleAuthFallback() {
     }, 900);
 }
 
+function unsubscribeFinancialListeners() {
+    if (financialPayoutsUnsubscribe) {
+        financialPayoutsUnsubscribe();
+        financialPayoutsUnsubscribe = null;
+    }
+    if (platformFeePaymentsUnsubscribe) {
+        platformFeePaymentsUnsubscribe();
+        platformFeePaymentsUnsubscribe = null;
+    }
+}
+
+function ensureFinancialSection() {
+    if (document.getElementById('financialsSection')) return;
+
+    const sidebarNav = document.querySelector('.nav-links');
+    const mobileNav = document.querySelector('.mobile-nav-list');
+    const targetShell = document.querySelector('.main-panel');
+    if (!targetShell) return;
+
+    const financialsButton = document.createElement('button');
+    financialsButton.className = 'nav-item';
+    financialsButton.setAttribute('data-section', 'financials');
+    financialsButton.innerHTML = '<span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16v10H4z"/><path d="M8 11h8"/><path d="M8 15h5"/></svg></span><span>Financials</span>';
+    financialsButton.addEventListener('click', () => {
+        showSection('financials');
+        if (window.innerWidth <= 780) {
+            setMobileNavOpen(false);
+        }
+    });
+    sidebarNav?.appendChild(financialsButton);
+
+    const mobileFinancialsButton = document.createElement('button');
+    mobileFinancialsButton.className = 'nav-item mobile-nav-item';
+    mobileFinancialsButton.setAttribute('data-section', 'financials');
+    mobileFinancialsButton.innerHTML = '<span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16v10H4z"/><path d="M8 11h8"/><path d="M8 15h5"/></svg></span><span>Financials</span>';
+    mobileFinancialsButton.addEventListener('click', () => {
+        showSection('financials');
+        setMobileNavOpen(false);
+    });
+    mobileNav?.appendChild(mobileFinancialsButton);
+
+    const section = document.createElement('section');
+    section.id = 'financialsSection';
+    section.className = 'section-panel';
+    section.innerHTML = `
+      <div class="panel-card">
+        <div class="panel-card-header">
+          <h3>Financials</h3>
+          <span class="badge">Payouts & fees</span>
+        </div>
+        <div id="financialsContent" class="stack"></div>
+      </div>
+    `;
+    targetShell.appendChild(section);
+}
+
 function init() {
     bindEvents();
     firebase = initFirebase();
@@ -107,6 +167,7 @@ function init() {
 }
 
 function bindEvents() {
+    ensureFinancialSection();
     loginForm?.addEventListener('submit', handleLogin);
     registerForm?.addEventListener('submit', handleRegister);
     showRegisterButton?.addEventListener('click', () => toggleAuthMode(true));
@@ -201,6 +262,7 @@ function bindEvents() {
     });
     document.getElementById('createPromotionButton')?.addEventListener('click', openPromotionModal);
     document.getElementById('createCouponButton')?.addEventListener('click', openCouponModal);
+    document.getElementById('analyticsApplyRangeButton')?.addEventListener('click', () => renderAnalytics());
     document.getElementById('bulkActivateButton')?.addEventListener('click', () => bulkUpdateMenu(true));
     document.getElementById('bulkDeactivateButton')?.addEventListener('click', () => bulkUpdateMenu(false));
     document.getElementById('bulkDeleteButton')?.addEventListener('click', bulkDeleteMenu);
@@ -304,6 +366,29 @@ function setActiveNavigation(section) {
     document.querySelectorAll('.nav-item[data-section], .mobile-nav-item[data-section]').forEach((button) => {
         button.classList.toggle('active', button.getAttribute('data-section') === section);
     });
+}
+
+function setupFinancialListeners() {
+    if (!firestore || !state.restaurantId) return;
+    unsubscribeFinancialListeners();
+
+    financialPayoutsUnsubscribe = firestore.collection('deliveryPayouts')
+        .where('restaurantId', '==', state.restaurantId)
+        .onSnapshot((snapshot) => {
+            state.financialPayouts = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+            if (state.activeSection === 'financials') {
+                renderFinancials();
+            }
+        });
+
+    platformFeePaymentsUnsubscribe = firestore.collection('platformFeePayments')
+        .where('restaurantId', '==', state.restaurantId)
+        .onSnapshot((snapshot) => {
+            state.platformFeePayments = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+            if (state.activeSection === 'financials') {
+                renderFinancials();
+            }
+        });
 }
 
 function toggleAuthMode(showRegister) {
@@ -601,6 +686,7 @@ async function handleAuthStateChange(user) {
         };
         state.restaurantId = resolvedRestaurant.id;
         state.restaurantProfile = normalizedProfile;
+        setupFinancialListeners();
         authScreen.classList.add('hidden');
         appShell.classList.remove('hidden');
         showSection('dashboard');
@@ -1186,27 +1272,58 @@ function renderNotifications() {
 }
 
 function renderAnalytics() {
-    const totals = state.orders.filter((order) => ['delivered', 'received'].includes(order.status));
+    const startDateInput = document.getElementById('analyticsStartDate');
+    const endDateInput = document.getElementById('analyticsEndDate');
+    const startDate = startDateInput?.value ? new Date(`${startDateInput.value}T00:00:00`) : null;
+    const endDate = endDateInput?.value ? new Date(`${endDateInput.value}T23:59:59`) : null;
+
+    const totals = state.orders.filter((order) => ['delivered', 'received'].includes(order.status) && isDateInRange(order.createdAt, startDate, endDate));
     const revenue = sumRevenue(totals);
     const avgOrder = totals.length ? revenue / totals.length : 0;
-    const refundAmount = state.orders.filter((order) => ['refunded', 'refund_requested'].includes(order.status) || order.refundRequested).reduce((sum, order) => sum + Number(order.refundAmount || order.total || 0), 0);
-    const pendingOrders = state.orders.filter((order) => order.status === 'pending').length;
-    const cancellationRate = state.orders.length ? Math.round((state.orders.filter((order) => order.status === 'cancelled').length / state.orders.length) * 100) : 0;
+    const refundAmount = state.orders.filter((order) => ['refunded', 'refund_requested'].includes(order.status) || order.refundRequested).filter((order) => isDateInRange(order.createdAt, startDate, endDate)).reduce((sum, order) => sum + Number(order.refundAmount || order.total || 0), 0);
+    const pendingOrders = state.orders.filter((order) => order.status === 'pending' && isDateInRange(order.createdAt, startDate, endDate)).length;
+    const cancellationRate = totals.length ? Math.round((totals.filter((order) => order.status === 'cancelled').length / totals.length) * 100) : 0;
+    const feeRevenue = totals.reduce((sum, order) => sum + Number(order.deliveryFee || 0), 0);
+    const netEarnings = revenue - feeRevenue;
 
     document.getElementById('analyticsSummary').innerHTML = `
     <div class="panel-card stat-card"><h4>Revenue</h4><div class="value">${formatCurrency(revenue)}</div></div>
+    <div class="panel-card stat-card"><h4>Net earnings</h4><div class="value">${formatCurrency(netEarnings)}</div></div>
     <div class="panel-card stat-card"><h4>Orders</h4><div class="value">${totals.length}</div></div>
     <div class="panel-card stat-card"><h4>Average Order</h4><div class="value">${formatCurrency(avgOrder)}</div></div>
     <div class="panel-card stat-card"><h4>Pending Orders</h4><div class="value">${pendingOrders}</div></div>
-    <div class="panel-card stat-card"><h4>Refunded</h4><div class="value">${formatCurrency(refundAmount)}</div></div>
-    <div class="panel-card stat-card"><h4>Cancellation Rate</h4><div class="value">${cancellationRate}%</div></div>`;
+    <div class="panel-card stat-card"><h4>Refunded</h4><div class="value">${formatCurrency(refundAmount)}</div></div>`;
 
-    const bars = state.orders.slice(0, 6).map((order) => {
-        const orderDate = order.createdAt ? new Date(order.createdAt.seconds ? order.createdAt.seconds * 1000 : order.createdAt).toLocaleDateString('en-LR', { month: 'short', day: 'numeric' }) : 'recent';
-        return `<div><div class="panel-card-header"><strong>${order.orderNumber || order.id}</strong><span>${formatCurrency(order.total || 0)}</span></div><div class="chart-bar" style="width:${Math.max(22, Math.min(100, (Number(order.total || 0) / 1000) * 100))}%"></div><div class="muted">${orderDate}</div></div>`;
-    }).join('');
-    document.getElementById('revenueChart').innerHTML = bars || '<div class="empty-state">No chart data yet.</div>';
-    document.getElementById('productChart').innerHTML = state.menuItems.slice(0, 6).map((item) => `<div class="panel-card-header"><strong>${item.name || 'Item'}</strong><span>${item.availability ? 'Live' : 'Offline'}</span></div>`).join('');
+    const chartSeries = totals.length ? totals.slice(0, 8).map((order) => ({
+        label: order.orderNumber || order.id.slice(0, 6),
+        amount: Number(order.total || 0),
+        date: order.createdAt ? new Date(order.createdAt.seconds ? order.createdAt.seconds * 1000 : order.createdAt) : new Date()
+    })) : [];
+
+    document.getElementById('revenueChart').innerHTML = chartSeries.length ? `
+      <div class="stack">
+        ${chartSeries.map((entry) => `
+          <div class="list-item">
+            <div class="panel-card-header">
+              <strong>${entry.label}</strong>
+              <span>${formatCurrency(entry.amount)}</span>
+            </div>
+            <div class="muted">${entry.date.toLocaleDateString('en-LR', { month: 'short', day: 'numeric' })}</div>
+          </div>`).join('')}
+      </div>` : '<div class="empty-state">No completed orders in the selected range.</div>';
+
+    const productRows = state.menuItems.slice(0, 6).map((item) => `
+      <div class="panel-card-header">
+        <strong>${item.name || 'Item'}</strong>
+        <span>${item.availability ? 'Live' : 'Offline'}</span>
+      </div>`).join('');
+    document.getElementById('productChart').innerHTML = productRows || '<div class="empty-state">No menu items yet.</div>';
+    document.getElementById('analyticsInsights').innerHTML = `
+      <div class="panel-card inset-card">
+        <h4>Snapshot</h4>
+        <div class="muted">Revenue range: ${formatCurrency(revenue)} • Delivery fees: ${formatCurrency(feeRevenue)}</div>
+        <div class="muted">Cancellation rate: ${cancellationRate}% • Refunds: ${formatCurrency(refundAmount)}</div>
+      </div>`;
 }
 
 function renderProfileForm() {
@@ -1229,6 +1346,11 @@ function renderProfileForm() {
     <label>Address<input name="address" value="${profile.address || ''}" /></label>
     <label>City<input name="city" value="${profile.city || ''}" /></label>
     <label>County<input name="county" value="${profile.county || ''}" /></label>
+    <label>Community<select name="community">
+      <option value="">Select community</option>
+      ${getCommunityOptions().map((community) => `<option value="${escapeHtml(community)}" ${profile.community === community ? 'selected' : ''}>${escapeHtml(community)}</option>`).join('')}
+    </select></label>
+    <label>District<input name="district" value="${profile.district || ''}" /></label>
     <label>Image Path<input name="imagePath" value="${profile.imagePath || profile.logo || profile.image || ''}" /></label>
     <label>Banner Path<input name="banner" value="${profile.banner || ''}" /></label>
     <label class="full">Description<textarea name="description">${profile.description || ''}</textarea></label>
@@ -1287,6 +1409,221 @@ function renderSupportRequests() {
       <div class="muted">${request.email || ''}</div>
       <span class="badge">${request.status || 'new'}</span>
     </div>`).join('') : '<div class="empty-state">No support requests yet.</div>';
+}
+
+async function generateDeliveryPayout() {
+    const selectedDeliveryUid = document.getElementById('financialPayoutDeliverySelect')?.value;
+    if (!selectedDeliveryUid) {
+        createToast('Select a delivery person first.', 'warning');
+        return;
+    }
+    const periodStart = new Date();
+    periodStart.setDate(periodStart.getDate() - 7);
+    const periodEnd = new Date();
+    const ordersSnapshot = await firestore.collection('orders')
+        .where('restaurantId', '==', state.restaurantId)
+        .where('deliveryPersonUid', '==', selectedDeliveryUid)
+        .where('status', '==', 'delivered')
+        .get();
+
+    let totalDeliveryFees = 0;
+    ordersSnapshot.forEach((doc) => {
+        const data = doc.data() || {};
+        const deliveredAt = data.deliveredAt?.toDate ? data.deliveredAt.toDate() : data.deliveredAt ? new Date(data.deliveredAt) : null;
+        if (deliveredAt && deliveredAt >= periodStart && deliveredAt <= periodEnd) {
+            totalDeliveryFees += Number(data.deliveryFee || 0);
+        }
+    });
+
+    if (!totalDeliveryFees) {
+        createToast('No completed deliveries were found for that period.', 'warning');
+        return;
+    }
+
+    const payoutPayload = {
+        restaurantId: state.restaurantId,
+        deliveryPersonUid: selectedDeliveryUid,
+        deliveryPersonName: state.deliveryUsers.find((entry) => (entry.uid || entry.id) === selectedDeliveryUid)?.displayName || selectedDeliveryUid,
+        periodStart,
+        periodEnd,
+        totalDeliveryFees,
+        status: 'pending',
+        paymentReference: '',
+        payerPhone: '',
+        amountPaid: 0,
+        createdAt: new Date(),
+        updatedAt: new Date()
+    };
+    await firestore.collection('deliveryPayouts').add(payoutPayload);
+    await createNotification(selectedDeliveryUid, 'Payout request created', `A payout request for ${formatCurrency(totalDeliveryFees)} is waiting for your confirmation.`, 'payout_due');
+    createToast('Delivery payout request created.', 'success');
+}
+
+async function generatePlatformFee() {
+    const settingsDoc = await firestore.collection('adminSettings').doc('config').get();
+    const settings = settingsDoc.data() || {};
+    const periodStart = new Date();
+    periodStart.setDate(periodStart.getDate() - 7);
+    const periodEnd = new Date();
+    const ordersSnapshot = await firestore.collection('orders')
+        .where('restaurantId', '==', state.restaurantId)
+        .where('status', '==', 'delivered')
+        .get();
+
+    let totalSales = 0;
+    let totalDeliveryFees = 0;
+    ordersSnapshot.forEach((doc) => {
+        const data = doc.data() || {};
+        const deliveredAt = data.deliveredAt?.toDate ? data.deliveredAt.toDate() : data.deliveredAt ? new Date(data.deliveredAt) : null;
+        if (deliveredAt && deliveredAt >= periodStart && deliveredAt <= periodEnd) {
+            totalSales += Number(data.total || 0);
+            totalDeliveryFees += Number(data.deliveryFee || 0);
+        }
+    });
+
+    const totalSalesExcludingDelivery = Math.max(0, totalSales - totalDeliveryFees);
+    const feeAmount = settings.platformFeeType === 'percentage'
+        ? totalSalesExcludingDelivery * (Number(settings.platformFeeValue || 0) / 100)
+        : Number(settings.platformFeeValue || 0);
+
+    const feePayload = {
+        restaurantId: state.restaurantId,
+        periodStart,
+        periodEnd,
+        totalSalesExcludingDelivery,
+        feeAmount,
+        status: 'pending',
+        paymentReference: '',
+        payerPhone: '',
+        amountPaid: 0,
+        createdAt: new Date(),
+        updatedAt: new Date()
+    };
+    await firestore.collection('platformFeePayments').add(feePayload);
+    await createNotification(state.authUser?.uid, 'Platform fee due', `A platform fee of ${formatCurrency(feeAmount)} is ready to be paid.`, 'fee_due');
+    createToast('Platform fee payment record created.', 'success');
+}
+
+async function markPayoutAsPaid(payoutId) {
+    const payout = state.financialPayouts.find((entry) => entry.id === payoutId);
+    if (!payout) return;
+    const paymentReference = window.prompt('Enter the payment reference');
+    const payerPhone = window.prompt('Enter the payer phone number');
+    const amountPaid = window.prompt('Enter the amount paid', String(payout.totalDeliveryFees || 0));
+    if (!paymentReference || !payerPhone || !amountPaid) {
+        createToast('Please fill all payment details before submitting.', 'warning');
+        return;
+    }
+    await firestore.collection('deliveryPayouts').doc(payoutId).set({
+        status: 'paid',
+        paymentReference: paymentReference.trim(),
+        payerPhone: payerPhone.trim(),
+        amountPaid: Number(amountPaid || 0),
+        updatedAt: new Date()
+    }, { merge: true });
+    const deliveryPersonUid = payout.deliveryPersonUid;
+    if (deliveryPersonUid) {
+        await createNotification(deliveryPersonUid, 'Payment marked as made', `The restaurant marked a payout of ${formatCurrency(Number(amountPaid || 0))} as paid.`, 'payout_awaiting_confirmation');
+    }
+    createToast('Payout marked as paid.', 'success');
+}
+
+async function markFeeAsPaid(feeId) {
+    const fee = state.platformFeePayments.find((entry) => entry.id === feeId);
+    if (!fee) return;
+    const paymentReference = window.prompt('Enter the payment reference');
+    const payerPhone = window.prompt('Enter the payer phone number');
+    const amountPaid = window.prompt('Enter the amount paid', String(fee.feeAmount || 0));
+    if (!paymentReference || !payerPhone || !amountPaid) {
+        createToast('Please fill all payment details before submitting.', 'warning');
+        return;
+    }
+    await firestore.collection('platformFeePayments').doc(feeId).set({
+        status: 'paid',
+        paymentReference: paymentReference.trim(),
+        payerPhone: payerPhone.trim(),
+        amountPaid: Number(amountPaid || 0),
+        updatedAt: new Date()
+    }, { merge: true });
+
+    const adminQuery = await firestore.collection('users').where('role', '==', 'admin').limit(1).get();
+    if (!adminQuery.empty) {
+        const adminUser = adminQuery.docs[0];
+        await createNotification(adminUser.id, 'Fee payment pending confirmation', `A platform fee payment of ${formatCurrency(Number(amountPaid || 0))} is waiting for confirmation.`, 'fee_awaiting_confirmation');
+    }
+    createToast('Platform fee marked as paid.', 'success');
+}
+
+function renderFinancials() {
+    const container = document.getElementById('financialsContent');
+    if (!container) return;
+
+    const payouts = (state.financialPayouts || []).filter((entry) => !entry.isDeleted).sort((a, b) => Number(b.createdAt?.seconds || b.createdAt || 0) - Number(a.createdAt?.seconds || a.createdAt || 0));
+    const fees = (state.platformFeePayments || []).filter((entry) => !entry.isDeleted).sort((a, b) => Number(b.createdAt?.seconds || b.createdAt || 0) - Number(a.createdAt?.seconds || a.createdAt || 0));
+    const payoutOptions = Array.from(new Set(
+        state.orders
+            .filter((order) => order.deliveryPersonUid && order.status === 'delivered')
+            .map((order) => order.deliveryPersonUid)
+            .filter(Boolean)
+    ));
+    const payoutSelectOptions = payoutOptions.length ? payoutOptions.map((uid) => {
+        const deliveryUser = state.deliveryUsers.find((entry) => (entry.uid || entry.id) === uid);
+        return `<option value="${uid}">${deliveryUser?.displayName || deliveryUser?.email || uid}</option>`;
+    }).join('') : '<option value="">No completed deliveries yet</option>';
+
+    container.innerHTML = `
+      <div class="financial-grid">
+        <div class="panel-card financial-card">
+          <div class="panel-card-header">
+            <h4>Delivery payouts</h4>
+            <button class="primary-btn" type="button" data-financial-action="generate-payout">Generate payout</button>
+          </div>
+          <label>Delivery person<select id="financialPayoutDeliverySelect">${payoutSelectOptions}</select></label>
+          ${payouts.length ? payouts.map((payout) => `
+            <div class="financial-item">
+              <div class="panel-card-header">
+                <strong>${payout.deliveryPersonName || payout.deliveryPersonUid || 'Delivery person'}</strong>
+                <span class="status-badge ${payout.status || 'pending'}">${(payout.status || 'pending').replace(/_/g, ' ')}</span>
+              </div>
+              <div class="muted">${formatCurrency(payout.totalDeliveryFees || 0)} • ${formatDate(payout.createdAt)}</div>
+              <div class="muted">Reference: ${payout.paymentReference || 'Pending upload'}</div>
+              ${payout.status === 'pending' ? `<div class="action-row"><button class="primary-btn" data-financial-action="mark-payout-paid" data-id="${payout.id}">Mark as paid</button></div>` : ''}
+            </div>`).join('') : '<div class="empty-state">No delivery payouts created yet.</div>'}
+        </div>
+        <div class="panel-card financial-card">
+          <div class="panel-card-header">
+            <h4>Platform fees</h4>
+            <button class="primary-btn" type="button" data-financial-action="generate-fee">Generate fee</button>
+          </div>
+          ${fees.length ? fees.map((fee) => `
+            <div class="financial-item">
+              <div class="panel-card-header">
+                <strong>${formatCurrency(fee.feeAmount || 0)}</strong>
+                <span class="status-badge ${fee.status || 'pending'}">${(fee.status || 'pending').replace(/_/g, ' ')}</span>
+              </div>
+              <div class="muted">Period: ${formatDate(fee.periodStart)} → ${formatDate(fee.periodEnd)}</div>
+              <div class="muted">Reference: ${fee.paymentReference || 'Pending upload'}</div>
+              ${fee.status === 'pending' ? `<div class="action-row"><button class="primary-btn" data-financial-action="mark-fee-paid" data-id="${fee.id}">Mark as paid</button></div>` : ''}
+            </div>`).join('') : '<div class="empty-state">No platform fee payments generated yet.</div>'}
+        </div>
+      </div>
+    `;
+
+    container.querySelectorAll('[data-financial-action]').forEach((button) => {
+        button.addEventListener('click', async () => {
+            const action = button.dataset.financialAction;
+            const id = button.dataset.id;
+            if (action === 'generate-payout') {
+                await generateDeliveryPayout();
+            } else if (action === 'generate-fee') {
+                await generatePlatformFee();
+            } else if (action === 'mark-payout-paid') {
+                await markPayoutAsPaid(id);
+            } else if (action === 'mark-fee-paid') {
+                await markFeeAsPaid(id);
+            }
+        });
+    });
 }
 
 function renderHelpSession() {
@@ -1418,13 +1755,16 @@ function renderDeliveryPartnerRequests() {
 }
 
 function showSection(section) {
-    const allowedSection = state.canSell || section === 'profile' ? section : 'profile';
+    const allowedSection = state.canSell || section === 'profile' || section === 'financials' ? section : 'profile';
     state.activeSection = allowedSection;
     setActiveNavigation(allowedSection);
     setMobileNavOpen(false);
     sectionPanels.forEach((panel) => panel.classList.toggle('active', panel.id === `${allowedSection}Section`));
     if (allowedSection === 'help') {
         renderHelpSession();
+    }
+    if (allowedSection === 'financials') {
+        renderFinancials();
     }
     const titleMap = {
         dashboard: ['Dashboard', 'Track menu performance and orders in real time.'],
@@ -1440,7 +1780,8 @@ function showSection(section) {
         settings: ['Settings', 'Tune your store preferences.'],
         'delivery-partners': ['Delivery Partners', 'Invite and approve delivery partners for your store.'],
         help: ['Help Center', 'Find guides and support resources for restaurants.'],
-        chat: ['Chat', 'Open a future-ready support conversation.']
+        chat: ['Chat', 'Open a future-ready support conversation.'],
+        financials: ['Financials', 'Track delivery payouts and weekly platform fees.']
     };
     const [title, subtitle] = titleMap[allowedSection] || titleMap.dashboard;
     pageTitle.textContent = title;
@@ -1585,6 +1926,8 @@ async function saveProfile(event) {
         address: data.address,
         city: data.city,
         county: data.county,
+        community: data.community || '',
+        district: data.district || '',
         imagePath: data.imagePath || '',
         image: data.imagePath || '',
         logo: data.imagePath || '',
@@ -2031,14 +2374,32 @@ async function handleOrderAction(action, orderId) {
     }
     if (!nextStatus) {
         if (action === 'approve-refund') {
-            await orderRef.update({ status: 'refund_approved', refundStatus: 'approved', updatedAt: new Date() });
+            await orderRef.update({
+                status: 'refund_approved',
+                refundStatus: 'approved',
+                refundAmount: Number(currentOrder.refundAmount || currentOrder.total || 0),
+                refundProcessedAt: new Date(),
+                refundConfirmedAt: null,
+                updatedAt: new Date()
+            });
+            if (currentOrder.customerUid) {
+                await createNotification(currentOrder.customerUid, 'Refund approved', `Refund for order #${currentOrder.orderNumber || orderId.slice(0, 6)} was approved. Please confirm you received it.`, 'refund');
+            }
             await loadOrders();
             renderOrders();
             createToast('Refund approved.', 'success');
             return;
         }
         if (action === 'reject-refund') {
-            await orderRef.update({ refundStatus: 'rejected', updatedAt: new Date() });
+            await orderRef.update({
+                refundStatus: 'rejected',
+                refundRejectedReason: currentOrder.refundReason || 'No reason provided',
+                refundProcessedAt: new Date(),
+                updatedAt: new Date()
+            });
+            if (currentOrder.customerUid) {
+                await createNotification(currentOrder.customerUid, 'Refund rejected', `Refund for order #${currentOrder.orderNumber || orderId.slice(0, 6)} was rejected by the restaurant.`, 'refund');
+            }
             await loadOrders();
             renderOrders();
             createToast('Refund rejected.', 'success');
