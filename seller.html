@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>MANNA Seller • Partner Portal</title>
+    <meta name="theme-color" content="#10212c" />
+    <meta name="description" content="MANNA seller portal for managing storefronts, listings, and order performance." />
+    <link rel="shortcut icon" href="./favicon.ico" type="image/x-icon" />
+    <link rel="icon" href="./images/logo/logo.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./images/logo/logo.png" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="stylesheet" href="./style.css" />
+    <link rel="stylesheet" href="./customer.css" />
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
+</head>
+
+<body>
+    <div id="authScreen" class="auth-screen">
+        <div class="auth-card">
+            <div class="auth-brand">
+                <img src="./images/logo/logo.svg" alt="MANNA logo" class="brand-logo" />
+                <div>
+                    <h1>MANNA</h1>
+                    <p>Seller Partner Portal</p>
+                </div>
+            </div>
+            <a href="./index.html" class="auth-back-link">
+                <span class="back-icon" aria-hidden="true">←</span>
+                <span>Back to default login</span>
+            </a>
+            <form id="loginForm" class="auth-form">
+                <label>Email<input type="email" id="loginEmail" required placeholder="seller@example.com" /></label>
+                <label>Password<div class="password-input-wrap"><input type="password" id="loginPassword" required
+                            placeholder="Enter password" /><button type="button" class="password-toggle"
+                            aria-label="Show password" title="Show password"></button></div></label>
+                <button type="submit" class="primary-btn">Sign In</button>
+                <button type="button" id="showRegisterButton" class="ghost-btn">Create account</button>
+                <button type="button" id="forgotPasswordButton" class="text-btn">Forgot password?</button>
+            </form>
+            <form id="registerForm" class="auth-form hidden">
+                <label>Full Name<input id="registerName" required /></label>
+                <label>Phone<input id="registerPhone" required /></label>
+                <label>Email<input id="registerEmail" type="email" required /></label>
+                <label>Password<div class="password-input-wrap"><input id="registerPassword" type="password"
+                            required /><button type="button" class="password-toggle" aria-label="Show password"
+                            title="Show password"></button></div></label>
+                <label>Confirm Password<div class="password-input-wrap"><input id="registerConfirmPassword"
+                            type="password" required /><button type="button" class="password-toggle"
+                            aria-label="Show password" title="Show password"></button></div></label>
+                <button type="submit" class="primary-btn">Create Account</button>
+                <button type="button" id="showLoginButton" class="ghost-btn">Back to login</button>
+            </form>
+            <div id="authMessage" class="auth-message"></div>
+        </div>
+    </div>
+
+    <script type="module" src="./app.js"></script>
+    <script src="./password-toggle.js"></script>
+</body>
+
+</html>

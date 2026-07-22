@@ -31,12 +31,12 @@
                 <div class="hero-actions">
                     <button id="seedButton" class="primary-btn">Seed demo data</button>
                     <a href="./admin.html" class="ghost-btn">Open admin</a>
+                    <div class="hero-role-links-inline">
+                        <a href="./customer.html" class="ghost-btn hero-role-link">Customer</a>
+                        <a href="./restaurant.html" class="ghost-btn hero-role-link">Restaurant</a>
+                        <a href="./delivery.html" class="ghost-btn hero-role-link">Delivery</a>
+                    </div>
                 </div>
-            </div>
-            <div class="hero-highlights" aria-label="Platform highlights">
-                <div class="highlight-pill">Live dashboards</div>
-                <div class="highlight-pill">Smart routing</div>
-                <div class="highlight-pill">Premium marketplace</div>
             </div>
         </header>
 
@@ -150,6 +150,16 @@
                     <button id="showRegisterButton" class="ghost-btn">Create account</button>
                     <button id="showLoginButton" class="ghost-btn hidden">Back to login</button>
                     <button id="showResetButton" class="text-btn">Forgot password?</button>
+                </div>
+                <div class="other-roles">
+                    <button id="toggleOtherRoles" type="button" class="ghost-btn">Other Roles</button>
+                    <div id="otherRolesMenu" class="other-roles-menu hidden" aria-hidden="true">
+                        <a href="./admin.html">Admin</a>
+                        <a href="./restaurant.html">Restaurant</a>
+                        <a href="./delivery.html">Delivery Person</a>
+                        <a href="./seller.html">Seller</a>
+                        <a href="./market-admin.html">Market Admin</a>
+                    </div>
                 </div>
                 <div id="phoneRecaptchaContainer" class="recaptcha-host" aria-hidden="true"></div>
                 <div id="authMessage" class="auth-message"></div>

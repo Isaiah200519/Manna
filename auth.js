@@ -122,6 +122,24 @@ export function setupAuthRouter(options = {}) {
         return profilePayload;
     }
 
+    function normalizeRole(role) {
+        const normalized = String(role || '').trim().toLowerCase();
+        if (normalized === 'delivery') return 'delivery_person';
+        if (normalized === 'delivery_person') return 'delivery_person';
+        if (normalized === 'market_admin' || normalized === 'market-admin') return 'market_admin';
+        if (normalized === 'seller') return 'seller';
+        if (normalized === 'customer' || normalized === 'user') return 'customer';
+        if (normalized === 'restaurant') return 'restaurant';
+        if (normalized === 'admin') return 'admin';
+        return null;
+    }
+
+    async function getUserRole(user) {
+        const profileDoc = await firestore.collection('users').doc(user.uid).get();
+        if (!profileDoc.exists) return null;
+        return normalizeRole(profileDoc.data()?.role);
+    }
+
     async function finishAuthFlow(user, role, fallbackName = '', message = 'Signed in successfully.') {
         shouldRedirectAfterAuth = true;
         await persistUserProfile(user, role, fallbackName);
@@ -233,13 +251,29 @@ export function setupAuthRouter(options = {}) {
             setAuthMessage('Please enter both email and password.', 'error');
             return;
         }
-        setSubmitButtonState(loginSubmitButton, true, 'Sign In');
+        setSubmitButtonState(loginSubmitButton, true, 'Signing in...');
         setAuthMessage('Signing you in...', 'info');
-        shouldRedirectAfterAuth = true;
+        shouldRedirectAfterAuth = false;
+
         try {
-            await auth.signInWithEmailAndPassword(email, password);
+            const result = await auth.signInWithEmailAndPassword(email, password);
+            const user = result.user;
+            const role = await getUserRole(user);
+            if (!role) {
+                await auth.signOut();
+                setAuthMessage('User profile not found.', 'error');
+                setSubmitButtonState(loginSubmitButton, false, 'Sign In');
+                return;
+            }
+            if (!['admin', 'restaurant', 'customer', 'delivery_person', 'seller', 'market_admin'].includes(role)) {
+                await auth.signOut();
+                setAuthMessage('Invalid user role.', 'error');
+                setSubmitButtonState(loginSubmitButton, false, 'Sign In');
+                return;
+            }
             setAuthMessage('Signed in successfully. Redirecting to your workspace...', 'success');
-            setSubmitButtonState(loginSubmitButton, false, 'Signed in ✓');
+            setSubmitButtonState(loginSubmitButton, false, 'Sign In');
+            redirectAfterAuth(role);
         } catch (error) {
             shouldRedirectAfterAuth = false;
             setAuthMessage(error.message, 'error');

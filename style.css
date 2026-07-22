@@ -90,6 +90,7 @@ html,
 body {
     max-width: 100%;
     overflow-x: hidden;
+    overflow-y: scroll;
 }
 
 html {
@@ -655,6 +656,20 @@ textarea:focus-visible {
     flex-wrap: wrap;
 }
 
+.hero-role-links-inline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-left: 12px;
+}
+
+.hero-role-link {
+    padding: 10px 14px;
+    font-size: 0.95rem;
+    white-space: nowrap;
+}
+
 .brand-block,
 .auth-brand,
 .logo-container,
@@ -752,11 +767,11 @@ textarea:focus-visible {
         width: 100%;
     }
 
-    .hero-highlights {
-        justify-content: flex-start;
+    .hero-actions {
+        justify-content: center;
+        align-items: center;
     }
 
-    .hero-actions,
     .action-row {
         flex-direction: column;
         align-items: stretch;
@@ -764,6 +779,26 @@ textarea:focus-visible {
 
     .action-row>* {
         width: 100%;
+    }
+
+    .hero-actions>* {
+        width: auto;
+    }
+
+    .hero-actions .primary-btn,
+    .hero-actions .secondary-btn,
+    .hero-actions .ghost-btn {
+        width: auto;
+        min-width: 0;
+    }
+
+    .hero-role-links-inline {
+        justify-content: center;
+    }
+
+    .hero-role-link {
+        width: auto;
+        white-space: nowrap;
     }
 
     .auth-form {
@@ -820,6 +855,42 @@ textarea:focus-visible {
 .auth-card h2 {
     font-size: 28px;
     font-weight: 800;
+}
+
+.other-roles {
+    position: relative;
+    display: inline-flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.other-roles-menu {
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 0;
+    min-width: 220px;
+    width: min(280px, 100%);
+    background: var(--bg-surface);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 18px;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.25);
+    z-index: 50;
+    padding: 8px 0;
+    display: grid;
+    gap: 0;
+}
+
+.other-roles-menu a {
+    display: block;
+    padding: 12px 16px;
+    color: var(--text-main);
+    text-decoration: none;
+    transition: background var(--transition-fast);
+}
+
+.other-roles-menu a:hover {
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .auth-card p {
