@@ -1,5 +1,5 @@
 import { initFirebase, clearStoredAuthState } from './firebase-config.js';
-import { formatCurrency, formatDate, createToast, getImageUrl, getAddonImageUrl, getRestaurantImageUrl, calculateDistance } from './utils.js';
+import { formatCurrency, formatDate, createToast, getImageUrl, getAddonImageUrl, getRestaurantImageUrl, calculateDistance, copyText, dialUSSD } from './utils.js';
 import { DEFAULT_CATEGORY_TAXONOMY, getCategoryDisplayName, getCategoryOptions } from './category-taxonomy.js';
 import { getQRCardHTML, initQRCode, bindQRDownloadHandlers } from './qr-utils.js';
 import { resolveRestaurantPaymentDetails } from './checkout-utils.mjs';
@@ -26,6 +26,7 @@ const state = {
     locationsUnsubscribe: null,
     cart: { restaurantId: '', restaurantName: '', items: [], addons: [], drink: null, paymentMethod: 'orange_money', paymentPhone: '', paymentDetails: '', contactPhone: '', notes: '', deliveryFee: 0, selectedLocationId: '', selectedAddonId: '', restaurantPaymentReceiver: '', restaurantAcceptedPaymentMethods: [] },
     checkoutLocationSelection: null,
+    checkoutPaymentNumbers: { restaurantId: '', orangeMoneyNumber: '', lonestarMoneyNumber: '', loading: false, loaded: false },
     activeSection: 'home',
     selectedRestaurant: null,
     selectedMenuItem: null,
@@ -122,6 +123,76 @@ function normalizeCartState(cart = {}) {
 
 function isFavoriteMenuItem(menuItemId) {
     return state.favorites.some((entry) => entry.type === 'menuItem' && (entry.menuItemId === menuItemId || entry.id === menuItemId));
+}
+
+function getCurrentCheckoutPaymentNumbers() {
+    const restaurantId = state.cart.restaurantId;
+    if (!restaurantId) {
+        return { restaurantId: '', orangeMoneyNumber: '', lonestarMoneyNumber: '', loading: false, loaded: false };
+    }
+
+    if (state.checkoutPaymentNumbers?.restaurantId === restaurantId) {
+        return state.checkoutPaymentNumbers;
+    }
+
+    return { restaurantId: '', orangeMoneyNumber: '', lonestarMoneyNumber: '', loading: false, loaded: false };
+}
+
+async function ensureCheckoutPaymentNumbers() {
+    const restaurantId = state.cart.restaurantId;
+    if (!restaurantId || !firestore) return getCurrentCheckoutPaymentNumbers();
+
+    const currentNumbers = state.checkoutPaymentNumbers;
+    if (currentNumbers?.restaurantId === restaurantId && (currentNumbers.loaded || currentNumbers.loading)) {
+        return currentNumbers;
+    }
+
+    state.checkoutPaymentNumbers = {
+        restaurantId,
+        orangeMoneyNumber: '',
+        lonestarMoneyNumber: '',
+        loading: true,
+        loaded: false
+    };
+
+    try {
+        const restaurantDoc = await firestore.collection('restaurants').doc(restaurantId).get();
+        const restaurantData = restaurantDoc.data() || {};
+        const nextNumbers = {
+            restaurantId,
+            orangeMoneyNumber: String(restaurantData.orangeMoneyNumber || restaurantData.mobileMoneyNumber || '').trim(),
+            lonestarMoneyNumber: String(restaurantData.lonestarMoneyNumber || '').trim(),
+            loading: false,
+            loaded: true
+        };
+        state.checkoutPaymentNumbers = nextNumbers;
+        if (document.getElementById('checkoutContent')) {
+            renderCheckout();
+        }
+        return nextNumbers;
+    } catch (error) {
+        console.error('[MANNA] Unable to load restaurant payment numbers:', error);
+        state.checkoutPaymentNumbers = {
+            restaurantId,
+            orangeMoneyNumber: '',
+            lonestarMoneyNumber: '',
+            loading: false,
+            loaded: true
+        };
+        return state.checkoutPaymentNumbers;
+    }
+}
+
+async function handleCopyUssd(code) {
+    const copied = await copyText(code);
+    createToast(copied ? 'USSD code copied to clipboard!' : 'Unable to copy automatically. Please copy the code manually.', copied ? 'success' : 'warning');
+}
+
+function handleDialUssd(code) {
+    const dialed = dialUSSD(code);
+    if (!dialed) {
+        createToast('Please manually dial the code using your phone’s dialer.', 'warning');
+    }
 }
 
 function isFavoriteRestaurant(restaurantId) {
@@ -1902,7 +1973,47 @@ function renderCheckout() {
     const activeAddress = getActiveAddress();
     const activeAddressLine = getAddressSummary(activeAddress) || state.customerProfile?.address || 'No active address';
     const coordinates = activeAddress?.coordinates?.latitude != null && activeAddress?.coordinates?.longitude != null ? `${activeAddress.coordinates.latitude}, ${activeAddress.coordinates.longitude}` : '';
-    const selectedPaymentMethod = state.cart.paymentMethod || 'orange_money';
+
+    const paymentNumbers = getCurrentCheckoutPaymentNumbers();
+    if (state.cart.restaurantId && !paymentNumbers.loaded && !paymentNumbers.loading) {
+        void ensureCheckoutPaymentNumbers();
+    }
+
+    const availablePaymentMethods = [];
+    if (paymentNumbers.orangeMoneyNumber) {
+        availablePaymentMethods.push('orange_money');
+    }
+    if (paymentNumbers.lonestarMoneyNumber) {
+        availablePaymentMethods.push('lonestar_mobile_money');
+    }
+
+    if (availablePaymentMethods.length && !availablePaymentMethods.includes(state.cart.paymentMethod)) {
+        state.cart.paymentMethod = availablePaymentMethods[0];
+        saveCartToStorage();
+    }
+
+    const selectedPaymentMethod = state.cart.paymentMethod || availablePaymentMethods[0] || 'orange_money';
+    const selectedPaymentNumber = selectedPaymentMethod === 'orange_money' ? paymentNumbers.orangeMoneyNumber : paymentNumbers.lonestarMoneyNumber;
+    const paymentMethodMeta = {
+        orange_money: {
+            label: 'Orange Money',
+            image: './images/payments/orange.png',
+            alt: 'Orange Money',
+            template: (number, amount) => `*126*1*${number}*${amount}#`
+        },
+        lonestar_mobile_money: {
+            label: 'Lonestar Cell',
+            image: './images/payments/lonestar.png',
+            alt: 'Lonestar Cell',
+            template: (number, amount) => `*182*1*${number}*${amount}#`
+        }
+    };
+    const activePaymentMeta = paymentMethodMeta[selectedPaymentMethod] || paymentMethodMeta.orange_money;
+    const payableAmount = Math.max(1, Math.round(total));
+    const ussdCode = selectedPaymentNumber ? activePaymentMeta.template(selectedPaymentNumber, payableAmount) : '';
+    const isUnavailable = Boolean(selectedPaymentMethod && selectedPaymentNumber === '' && state.cart.restaurantId);
+    const unavailableMessage = isUnavailable ? `This restaurant does not accept ${activePaymentMeta.label}. Please choose another method.` : '';
+
     document.getElementById('checkoutContent').innerHTML = `
     <div class="stack">
       <div class="item-card">
@@ -1971,18 +2082,26 @@ function renderCheckout() {
         <div class="item-card">
           <h4>Payment</h4>
           <div class="payment-method-selector">
-            <label class="payment-method-option ${selectedPaymentMethod === 'orange_money' ? 'selected' : ''}">
+            ${availablePaymentMethods.includes('orange_money') ? `<label class="payment-method-option ${selectedPaymentMethod === 'orange_money' ? 'selected' : ''}">
               <input type="radio" name="paymentMethod" value="orange_money" ${selectedPaymentMethod === 'orange_money' ? 'checked' : ''} />
-              <img src="./images/payment-logos/orange.png" alt="Orange Money" />
+              <img src="./images/payments/orange.png" alt="Orange Money" />
               <span>Orange Money</span>
-            </label>
-            <label class="payment-method-option ${selectedPaymentMethod === 'lonestar_mobile_money' ? 'selected' : ''}">
+            </label>` : ''}
+            ${availablePaymentMethods.includes('lonestar_mobile_money') ? `<label class="payment-method-option ${selectedPaymentMethod === 'lonestar_mobile_money' ? 'selected' : ''}">
               <input type="radio" name="paymentMethod" value="lonestar_mobile_money" ${selectedPaymentMethod === 'lonestar_mobile_money' ? 'checked' : ''} />
-              <img src="./images/payment-logos/lonestar.jpg" alt="Lonestar Mobile Money" />
-              <span>Lonestar</span>
-            </label>
+              <img src="./images/payments/lonestar.png" alt="Lonestar Cell" />
+              <span>Lonestar Cell</span>
+            </label>` : ''}
           </div>
           <div class="muted">Restaurant payment receiver: ${escapeHtml(paymentReceiverLabel)}</div>
+          ${isUnavailable ? `<div class="payment-unavailable-message">${escapeHtml(unavailableMessage)}</div>` : ussdCode ? `<div class="ussd-payment-card">
+            <div class="ussd-code-label">USSD payment code</div>
+            <div class="ussd-code" id="displayedUssdCode">${escapeHtml(ussdCode)}</div>
+            <div class="ussd-actions">
+              <button class="primary-btn" type="button" id="copyUssdButton">Copy Code</button>
+              <button class="ghost-btn dial-button" type="button" id="dialUssdButton">Call</button>
+            </div>
+          </div>` : '<div class="empty-state">Select a payment method to view the USSD code.</div>'}
           <div class="premium-payment-fields">
             <label class="premium-field">
               <span class="premium-field-title">Payment phone number</span>
@@ -2015,10 +2134,18 @@ function renderCheckout() {
         radio.addEventListener('change', () => {
             state.cart.paymentMethod = radio.value;
             saveCartToStorage();
-            document.querySelectorAll('.payment-method-option').forEach((option) => {
-                option.classList.toggle('selected', option.querySelector('input')?.value === radio.value);
-            });
+            renderCheckout();
         });
+    });
+    document.getElementById('copyUssdButton')?.addEventListener('click', () => {
+        const code = document.getElementById('displayedUssdCode')?.textContent?.trim();
+        if (!code) return;
+        handleCopyUssd(code);
+    });
+    document.getElementById('dialUssdButton')?.addEventListener('click', () => {
+        const code = document.getElementById('displayedUssdCode')?.textContent?.trim();
+        if (!code) return;
+        handleDialUssd(code);
     });
 }
 

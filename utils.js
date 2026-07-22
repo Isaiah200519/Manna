@@ -39,6 +39,44 @@ export function createToast(message, type = 'info') {
     window.setTimeout(() => toast.remove(), 2600);
 }
 
+export async function copyText(value, fallbackMessage = 'Copied to clipboard.') {
+    const text = String(value ?? '').trim();
+    if (!text) return false;
+
+    if (navigator.clipboard?.writeText) {
+        try {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } catch (error) {
+            console.warn('[MANNA] Clipboard API failed:', error);
+        }
+    }
+
+    try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        return true;
+    } catch (error) {
+        console.warn('[MANNA] Fallback copy failed:', error);
+        return false;
+    }
+}
+
+export function dialUSSD(code) {
+    const text = String(code ?? '').trim();
+    if (!text) return false;
+    const encoded = encodeURIComponent(text);
+    window.location.href = `tel:${encoded}`;
+    return true;
+}
+
 export function confirmDialog(message) {
     return window.confirm(message);
 }

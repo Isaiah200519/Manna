@@ -228,6 +228,94 @@ textarea:focus-visible {
     border-radius: 12px;
 }
 
+.payment-method-selector {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    margin-bottom: 12px;
+}
+
+.payment-method-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-main);
+    background: rgba(255, 255, 255, 0.03);
+    transition: border-color var(--transition-fast), transform var(--transition-fast), background var(--transition-fast);
+}
+
+.payment-method-option.selected {
+    border-color: var(--accent);
+    background: rgba(249, 115, 22, 0.14);
+    transform: translateY(-1px);
+}
+
+.payment-method-option input {
+    display: none;
+}
+
+.payment-method-option img {
+    width: 44px;
+    height: 44px;
+    object-fit: cover;
+    border-radius: 10px;
+}
+
+.payment-unavailable-message {
+    padding: 12px 14px;
+    border-radius: var(--radius-main);
+    border: 1px solid rgba(239, 68, 68, 0.28);
+    background: rgba(239, 68, 68, 0.12);
+    color: #fecaca;
+    margin-bottom: 12px;
+}
+
+.ussd-payment-card {
+    padding: 16px;
+    border-radius: var(--radius-main);
+    border: 1px solid rgba(249, 115, 22, 0.28);
+    background: linear-gradient(135deg, rgba(249, 115, 22, 0.16), rgba(255, 255, 255, 0.03));
+    margin-bottom: 12px;
+}
+
+.ussd-code-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #fdba74;
+    margin-bottom: 8px;
+}
+
+.ussd-code {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+    font-size: 15px;
+    color: var(--accent);
+    word-break: break-all;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 12px;
+}
+
+.ussd-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.dial-button {
+    display: none;
+}
+
+@media (max-width: 767px) {
+    .dial-button {
+        display: inline-flex;
+    }
+}
+
 .checkout-address-card {
     display: grid;
     gap: 8px;

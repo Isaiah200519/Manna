@@ -397,6 +397,8 @@ async function handleRegister(event) {
             estimatedPrepTime: 25,
             acceptedPaymentMethods: ['mobile_money', 'cash'],
             mobileMoneyNumber: '',
+            orangeMoneyNumber: '',
+            lonestarMoneyNumber: '',
             status: 'pending',
             isActive: true,
             createdAt: new Date(),
@@ -509,6 +511,8 @@ async function ensureRestaurantProfile(user, userData) {
         estimatedPrepTime: 25,
         acceptedPaymentMethods: ['mobile_money', 'cash'],
         mobileMoneyNumber: '',
+        orangeMoneyNumber: '',
+        lonestarMoneyNumber: '',
         status: userData?.restaurantStatus || userData?.status || 'pending',
         isActive: userData?.isApproved ?? (userData?.restaurantStatus === 'approved' || userData?.status === 'approved'),
         createdAt: new Date(),
@@ -1219,6 +1223,8 @@ function renderProfileForm() {
     <label>Owner Name<input name="ownerName" value="${profile.ownerName || ''}" /></label>
     <label>Phone<input name="phone" value="${profile.phone || ''}" /></label>
     <label>Mobile money receiver<input name="mobileMoneyNumber" value="${profile.mobileMoneyNumber || ''}" /></label>
+    <label>Orange Money Phone Number<input name="orangeMoneyNumber" type="tel" inputmode="numeric" value="${profile.orangeMoneyNumber || ''}" /></label>
+    <label>Lonestar Cell Phone Number<input name="lonestarMoneyNumber" type="tel" inputmode="numeric" value="${profile.lonestarMoneyNumber || ''}" /></label>
     <label>Email<input name="email" value="${profile.email || state.authUser?.email || ''}" /></label>
     <label>Address<input name="address" value="${profile.address || ''}" /></label>
     <label>City<input name="city" value="${profile.city || ''}" /></label>
@@ -1554,11 +1560,26 @@ async function saveProfile(event) {
     event.preventDefault();
     const form = document.getElementById('profileForm');
     const data = Object.fromEntries(new FormData(form));
+    const orangeMoneyNumber = String(data.orangeMoneyNumber || '').trim();
+    const lonestarMoneyNumber = String(data.lonestarMoneyNumber || '').trim();
+
+    if (orangeMoneyNumber && !/^\d{9,15}$/.test(orangeMoneyNumber)) {
+        createToast('Orange Money phone number must be numeric and at least 9 digits.', 'warning');
+        return;
+    }
+
+    if (lonestarMoneyNumber && !/^\d{9,15}$/.test(lonestarMoneyNumber)) {
+        createToast('Lonestar Cell phone number must be numeric and at least 9 digits.', 'warning');
+        return;
+    }
+
     const profilePayload = {
         businessName: data.businessName,
         ownerName: data.ownerName,
         phone: data.phone,
-        mobileMoneyNumber: data.mobileMoneyNumber || '',
+        mobileMoneyNumber: data.mobileMoneyNumber || orangeMoneyNumber || '',
+        orangeMoneyNumber,
+        lonestarMoneyNumber,
         acceptedPaymentMethods: state.restaurantProfile?.acceptedPaymentMethods || ['mobile_money', 'cash'],
         email: data.email,
         address: data.address,
