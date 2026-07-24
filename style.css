@@ -1333,7 +1333,7 @@ select {
 
 .sidebar {
     width: 250px;
-    padding: var(--space-lg);
+    padding: 0;
     border-right: 1px solid var(--border-color);
     background: rgba(20, 20, 20, 0.9);
     position: sticky;
@@ -1382,7 +1382,9 @@ select {
     align-items: center;
     justify-content: space-between;
     gap: var(--space-sm);
-    margin-bottom: var(--space-xl);
+    padding: var(--space-lg);
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .brand-block__content {
@@ -1413,8 +1415,7 @@ select {
     min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
-    padding-right: 4px;
-    padding-bottom: 8px;
+    padding: var(--space-md) var(--space-md) var(--space-lg);
     overscroll-behavior: contain;
 }
 
@@ -1454,7 +1455,11 @@ select {
 }
 
 .sidebar-footer {
-    margin-top: var(--space-lg);
+    flex-shrink: 0;
+    padding: var(--space-md) var(--space-lg) var(--space-lg);
+    border-top: 1px solid var(--border-color);
+    background: rgba(8, 8, 8, 0.8);
+    backdrop-filter: blur(12px);
 }
 
 .nav-item.danger,
@@ -3249,6 +3254,36 @@ button.disabled {
     }
 }
 
+@media (max-width: 1023px) {
+    .sidebar {
+        position: fixed !important;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        z-index: 1400;
+        height: 100vh;
+        height: 100dvh;
+        max-height: 100vh;
+        max-height: 100dvh;
+        transform: translateX(-102%);
+        transition: transform var(--transition-medium);
+    }
+
+    .sidebar.open {
+        transform: translateX(0);
+    }
+
+    .main-panel {
+        margin-left: 0;
+    }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+    .sidebar {
+        width: 240px;
+    }
+}
+
 @media (max-width: 767px) {
     .card-description {
         display: -webkit-box;
@@ -3287,22 +3322,11 @@ button.disabled {
     .sidebar,
     .cart-tray,
     .filter-panel {
-        display: block;
-        position: fixed;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        z-index: 1400;
+        display: flex;
         width: min(320px, 84vw);
-        transform: translateX(-102%);
-        transition: transform var(--transition-medium);
         border-radius: 0 22px 22px 0;
         box-shadow: 24px 0 80px rgba(0, 0, 0, 0.35);
-        padding: var(--space-lg) var(--space-md);
-    }
-
-    .sidebar.open {
-        transform: translateX(0);
+        padding: 0;
     }
 
     .sidebar .sidebar-close {
@@ -3311,7 +3335,7 @@ button.disabled {
 
     .sidebar .nav-links,
     .sidebar .sidebar-nav {
-        max-height: calc(100vh - 168px);
+        max-height: none;
     }
 
     .main-panel {

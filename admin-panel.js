@@ -58,14 +58,11 @@ const loginView = document.getElementById('loginView');
 const loginForm = document.getElementById('loginForm');
 const loginEmail = document.getElementById('loginEmail');
 const loginPassword = document.getElementById('loginPassword');
-const mobileNavSheet = document.getElementById('mobileNavSheet');
-const mobileNavClose = document.getElementById('mobileNavClose');
 const mobileMenuButton = document.getElementById('mobileMenuButton');
 const mobileBottomNav = document.getElementById('mobileBottomNav');
 const sidebar = document.getElementById('sidebar');
 const sidebarBackdrop = document.getElementById('sidebarBackdrop');
 const sidebarClose = document.getElementById('sidebarClose');
-const menuToggle = document.getElementById('menuToggle');
 
 function seedData() {
   const existing = localStorage.getItem('manna-admin-state');
@@ -173,58 +170,17 @@ function renderPageLayout(title, subtitle, actions = '', body = '') {
 }
 
 function setMobileNavOpen(isOpen) {
-  const isMobile = window.innerWidth <= 767;
-
-  if (mobileNavSheet) {
-    mobileNavSheet.classList.toggle('open', isMobile && isOpen);
-    mobileNavSheet.setAttribute('aria-hidden', String(!(isMobile && isOpen)));
-  }
+  const isSmallScreen = window.innerWidth <= 1023;
 
   if (sidebar) {
-    sidebar.classList.toggle('open', !isMobile && isOpen);
+    sidebar.classList.toggle('open', isSmallScreen && isOpen);
   }
 
   if (sidebarBackdrop) {
-    sidebarBackdrop.classList.toggle('open', !isMobile && isOpen);
+    sidebarBackdrop.classList.toggle('open', isSmallScreen && isOpen);
   }
 
-  document.body.style.overflow = isOpen ? 'hidden' : '';
-}
-
-function syncMobileNavItems() {
-  const mobileList = document.querySelector('.mobile-nav-list');
-  if (!mobileList) return;
-
-  const desktopItems = Array.from(document.querySelectorAll('.nav-item[data-section]')).filter(i => !i.closest('.mobile-nav-list'));
-  desktopItems.forEach((item) => {
-    const section = item.getAttribute('data-section');
-    if (!section) return;
-
-    const existingItem = mobileList.querySelector(`[data-section="${section}"]`);
-    if (existingItem) return;
-
-    const mobileBtn = document.createElement('button');
-    mobileBtn.className = 'nav-item mobile-nav-item';
-    mobileBtn.setAttribute('data-section', section);
-    const icon = item.querySelector('.nav-icon')?.innerHTML || '';
-    const label = item.textContent.trim() || section;
-    mobileBtn.innerHTML = `<span class="nav-icon">${icon}</span><span>${label}</span>`;
-    mobileList.appendChild(mobileBtn);
-  });
-
-  if (mobileList.dataset.bound === 'true') return;
-
-  mobileList.addEventListener('click', (e) => {
-    const btn = e.target.closest('.mobile-nav-item');
-    if (!btn) return;
-    const section = btn.getAttribute('data-section');
-    if (section) {
-      setActiveNavigation(section);
-      openSection && openSection(section);
-      setMobileNavOpen(false);
-    }
-  });
-  mobileList.dataset.bound = 'true';
+  document.body.style.overflow = isSmallScreen && isOpen ? 'hidden' : '';
 }
 
 function updateNotificationBadge() {
@@ -236,32 +192,34 @@ function updateNotificationBadge() {
 }
 
 function setActiveNavigation(section) {
-  document.querySelectorAll('.nav-item[data-section], .mobile-nav-item[data-section]').forEach((button) => {
+  document.querySelectorAll('.nav-item[data-section]').forEach((button) => {
     button.classList.toggle('active', button.getAttribute('data-section') === section);
   });
 }
 
 function attachEvents() {
-  document.querySelectorAll('.nav-item[data-section], .mobile-nav-item[data-section]').forEach((button) => {
+  document.querySelectorAll('.nav-item[data-section]').forEach((button) => {
     button.addEventListener('click', () => {
       const section = button.getAttribute('data-section');
       if (section) openSection(section);
-      if (window.innerWidth <= 780) {
+      if (window.innerWidth <= 1023) {
         setMobileNavOpen(false);
       }
     });
   });
 
   window.addEventListener('resize', () => {
+    if (window.innerWidth > 1023) {
+      sidebar?.classList.remove('open');
+      sidebarBackdrop?.classList.remove('open');
+      document.body.style.overflow = '';
+    }
+
     if (state.currentSection === 'dashboard') {
       requestAnimationFrame(drawRevenueChart);
     }
   });
 
-  menuToggle?.addEventListener('click', () => setMobileNavOpen(true));
-  if (mobileNavClose) {
-    mobileNavClose.addEventListener('click', () => setMobileNavOpen(false));
-  }
   if (sidebarClose) {
     sidebarClose.addEventListener('click', () => setMobileNavOpen(false));
   }
@@ -271,15 +229,6 @@ function attachEvents() {
   if (mobileMenuButton) {
     mobileMenuButton.addEventListener('click', () => setMobileNavOpen(true));
   }
-  if (mobileNavSheet) {
-    mobileNavSheet.addEventListener('click', (event) => {
-      if (event.target === mobileNavSheet) {
-        setMobileNavOpen(false);
-      }
-    });
-  }
-  // Ensure mobile menu contains all nav entries from desktop
-  syncMobileNavItems();
   // initial badge update
   updateNotificationBadge();
 
@@ -315,7 +264,6 @@ function attachEvents() {
     }
   };
   document.getElementById('logoutButton').addEventListener('click', adminLogout);
-  document.getElementById('logoutButtonSheet')?.addEventListener('click', adminLogout);
 
   window.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {

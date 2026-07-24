@@ -109,8 +109,8 @@ button {
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    gap: 12px;
     min-height: 100vh;
+    height: 100vh;
 }
 
 @media (min-width: 768px) {
@@ -132,13 +132,20 @@ button {
 }
 
 .sidebar .sidebar-header {
-    margin-bottom: 12px;
+    padding: 20px 18px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
 }
 
 .sidebar .sidebar-footer {
     margin-top: auto;
-    padding-top: 10px;
+    padding: 12px 16px 18px;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(5, 8, 14, 0.72);
+    backdrop-filter: blur(12px);
 }
 
 .sidebar .nav-links {
@@ -146,11 +153,14 @@ button {
     min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
-    padding-bottom: 6px;
+    padding: 10px 12px 8px;
 }
 
 .sidebar .nav-item {
     color: var(--muted);
+    width: 100%;
+    justify-content: flex-start;
+    text-align: left;
 }
 
 .sidebar .nav-item:hover,
@@ -166,6 +176,10 @@ button {
     background: rgba(239, 68, 68, 0.09);
     color: #fecaca;
     border: 1px solid rgba(239, 68, 68, 0.16);
+}
+
+.sidebar .sidebar-footer .nav-item.danger {
+    margin-top: 0;
 }
 
 .brand {
