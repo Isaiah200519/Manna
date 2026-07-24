@@ -173,27 +173,36 @@ function renderPageLayout(title, subtitle, actions = '', body = '') {
 }
 
 function setMobileNavOpen(isOpen) {
+  const isMobile = window.innerWidth <= 767;
+
   if (mobileNavSheet) {
-    mobileNavSheet.classList.remove('open');
-    mobileNavSheet.setAttribute('aria-hidden', 'true');
+    mobileNavSheet.classList.toggle('open', isMobile && isOpen);
+    mobileNavSheet.setAttribute('aria-hidden', String(!(isMobile && isOpen)));
   }
+
   if (sidebar) {
-    sidebar.classList.toggle('open', isOpen);
+    sidebar.classList.toggle('open', !isMobile && isOpen);
   }
+
   if (sidebarBackdrop) {
-    sidebarBackdrop.classList.toggle('open', isOpen);
+    sidebarBackdrop.classList.toggle('open', !isMobile && isOpen);
   }
+
   document.body.style.overflow = isOpen ? 'hidden' : '';
 }
 
 function syncMobileNavItems() {
   const mobileList = document.querySelector('.mobile-nav-list');
   if (!mobileList) return;
+
   const desktopItems = Array.from(document.querySelectorAll('.nav-item[data-section]')).filter(i => !i.closest('.mobile-nav-list'));
   desktopItems.forEach((item) => {
     const section = item.getAttribute('data-section');
     if (!section) return;
-    if (mobileList.querySelector(`.mobile-nav-item[data-section="${section}"]`)) return;
+
+    const existingItem = mobileList.querySelector(`[data-section="${section}"]`);
+    if (existingItem) return;
+
     const mobileBtn = document.createElement('button');
     mobileBtn.className = 'nav-item mobile-nav-item';
     mobileBtn.setAttribute('data-section', section);
@@ -202,7 +211,9 @@ function syncMobileNavItems() {
     mobileBtn.innerHTML = `<span class="nav-icon">${icon}</span><span>${label}</span>`;
     mobileList.appendChild(mobileBtn);
   });
-  // delegate click handling for dynamic items
+
+  if (mobileList.dataset.bound === 'true') return;
+
   mobileList.addEventListener('click', (e) => {
     const btn = e.target.closest('.mobile-nav-item');
     if (!btn) return;
@@ -213,17 +224,7 @@ function syncMobileNavItems() {
       setMobileNavOpen(false);
     }
   });
-  // remove duplicate mobile entries if any (keep first)
-  const seen = new Set();
-  Array.from(mobileList.querySelectorAll('.mobile-nav-item')).forEach((el) => {
-    const s = el.getAttribute('data-section');
-    if (!s) return;
-    if (seen.has(s)) {
-      el.remove();
-    } else {
-      seen.add(s);
-    }
-  });
+  mobileList.dataset.bound = 'true';
 }
 
 function updateNotificationBadge() {

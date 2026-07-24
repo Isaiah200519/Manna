@@ -454,16 +454,21 @@ function bindEvents() {
 }
 
 function setMobileNavOpen(isOpen) {
+    const isMobile = window.innerWidth <= 767;
+
     if (mobileNavSheet) {
-        mobileNavSheet.classList.remove('open');
-        mobileNavSheet.setAttribute('aria-hidden', 'true');
+        mobileNavSheet.classList.toggle('open', isMobile && isOpen);
+        mobileNavSheet.setAttribute('aria-hidden', String(!(isMobile && isOpen)));
     }
+
     if (sidebar) {
-        sidebar.classList.toggle('open', isOpen);
+        sidebar.classList.toggle('open', !isMobile && isOpen);
     }
+
     if (sidebarBackdrop) {
-        sidebarBackdrop.classList.toggle('open', isOpen);
+        sidebarBackdrop.classList.toggle('open', !isMobile && isOpen);
     }
+
     document.body.style.overflow = isOpen ? 'hidden' : '';
 }
 
