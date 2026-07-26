@@ -53,6 +53,7 @@ const mobileNavToggle = document.getElementById('mobileNavToggle') || document.g
 const mobileNavSheet = document.getElementById('mobileNavSheet');
 const mobileNavClose = document.getElementById('mobileNavClose');
 const mobileMenuButton = document.getElementById('mobileMenuButton');
+const sidebarToggle = document.getElementById('sidebarToggle');
 const sidebar = document.getElementById('sidebar');
 const sidebarBackdrop = document.getElementById('sidebarBackdrop');
 const sidebarClose = document.getElementById('sidebarClose');
@@ -120,7 +121,7 @@ function ensureFinancialSection() {
     financialsButton.innerHTML = '<span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16v10H4z"/><path d="M8 11h8"/><path d="M8 15h5"/></svg></span><span>Financials</span>';
     financialsButton.addEventListener('click', () => {
         showSection('financials');
-        if (window.innerWidth <= 780) {
+        if (window.innerWidth <= 1023) {
             setMobileNavOpen(false);
         }
     });
@@ -174,7 +175,15 @@ function bindEvents() {
     showLoginButton?.addEventListener('click', () => toggleAuthMode(false));
     forgotPasswordButton?.addEventListener('click', handleForgotPassword);
     logoutButton?.addEventListener('click', handleLogout);
-    mobileNavToggle?.addEventListener('click', () => setMobileNavOpen(true));
+    const openMobileMenu = (event) => {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        setMobileNavOpen(true);
+    };
+    mobileNavToggle?.addEventListener('click', openMobileMenu);
+    sidebarToggle?.addEventListener('click', openMobileMenu);
     if (mobileNavClose) {
         mobileNavClose.addEventListener('click', () => setMobileNavOpen(false));
     }
@@ -200,7 +209,7 @@ function bindEvents() {
             const section = button.dataset.section;
             if (section) {
                 showSection(section);
-                if (window.innerWidth <= 780) {
+                if (window.innerWidth <= 1023) {
                     setMobileNavOpen(false);
                 }
             }
@@ -291,17 +300,19 @@ function bindEvents() {
 }
 
 function setMobileNavOpen(isOpen) {
+    const isSmallScreen = window.innerWidth <= 1023;
+
     if (mobileNavSheet) {
         mobileNavSheet.classList.remove('open');
         mobileNavSheet.setAttribute('aria-hidden', 'true');
     }
     if (sidebar) {
-        sidebar.classList.toggle('open', isOpen);
+        sidebar.classList.toggle('open', isSmallScreen && isOpen);
     }
     if (sidebarBackdrop) {
-        sidebarBackdrop.classList.toggle('open', isOpen);
+        sidebarBackdrop.classList.toggle('open', isSmallScreen && isOpen);
     }
-    document.body.style.overflow = isOpen ? 'hidden' : '';
+    document.body.style.overflow = isSmallScreen && isOpen ? 'hidden' : '';
 }
 
 // ensure mobile nav mirrors desktop nav
@@ -338,7 +349,7 @@ function syncMobileNavItems() {
             const section = button.getAttribute('data-section');
             if (section) {
                 showSection(section);
-                if (window.innerWidth <= 780) {
+                if (window.innerWidth <= 1023) {
                     setMobileNavOpen(false);
                 }
             }

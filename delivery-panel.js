@@ -46,6 +46,7 @@ const elements = {
     mobileNavSheet: document.getElementById('mobileNavSheet'),
     mobileNavClose: document.getElementById('mobileNavClose'),
     mobileMenuButton: document.getElementById('mobileMenuButton'),
+    sidebarToggle: document.getElementById('sidebarToggle'),
     sidebar: document.getElementById('sidebar'),
     sidebarBackdrop: document.getElementById('sidebarBackdrop'),
     sidebarClose: document.getElementById('sidebarClose'),
@@ -143,6 +144,13 @@ function bindEvents() {
     }
     if (elements.mobileMenuButton) {
         elements.mobileMenuButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setMobileNavOpen(true);
+        });
+    }
+    if (elements.sidebarToggle) {
+        elements.sidebarToggle.addEventListener('click', (event) => {
             event.preventDefault();
             event.stopPropagation();
             setMobileNavOpen(true);
@@ -258,19 +266,19 @@ function setMobileNavOpen(isOpen) {
     const isMobile = window.innerWidth <= 767;
 
     if (elements.mobileNavSheet) {
-        elements.mobileNavSheet.classList.toggle('open', isMobile && isOpen);
-        elements.mobileNavSheet.setAttribute('aria-hidden', String(!(isMobile && isOpen)));
+        elements.mobileNavSheet.classList.toggle('open', false);
+        elements.mobileNavSheet.setAttribute('aria-hidden', 'true');
     }
 
     if (elements.sidebar) {
-        elements.sidebar.classList.toggle('open', !isMobile && isOpen);
+        elements.sidebar.classList.toggle('open', isMobile && isOpen);
     }
 
     if (elements.sidebarBackdrop) {
-        elements.sidebarBackdrop.classList.toggle('open', !isMobile && isOpen);
+        elements.sidebarBackdrop.classList.toggle('open', isMobile && isOpen);
     }
 
-    document.body.style.overflow = isOpen ? 'hidden' : '';
+    document.body.style.overflow = isMobile && isOpen ? 'hidden' : '';
 }
 
 function setActiveNavigation(section) {

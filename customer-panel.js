@@ -54,6 +54,7 @@ const mobileMenuButton = document.getElementById('mobileMenuButton');
 const notificationsToggle = document.getElementById('notificationsToggle');
 const customerNotificationBadge = document.getElementById('customerNotificationBadge');
 const customerNotificationBadgeCount = document.getElementById('customerNotificationBadgeCount');
+const sidebarToggle = document.getElementById('sidebarToggle');
 const sidebar = document.getElementById('sidebar');
 const sidebarBackdrop = document.getElementById('sidebarBackdrop');
 const sidebarClose = document.getElementById('sidebarClose');
@@ -327,6 +328,7 @@ function bindEvents() {
     };
 
     mobileNavToggle?.addEventListener('click', openMobileMenu);
+    sidebarToggle?.addEventListener('click', openMobileMenu);
     if (mobileNavClose) {
         mobileNavClose.addEventListener('click', (event) => {
             event.stopPropagation();
@@ -454,22 +456,22 @@ function bindEvents() {
 }
 
 function setMobileNavOpen(isOpen) {
-    const isMobile = window.innerWidth <= 767;
+    const isMobile = window.innerWidth <= 1023;
 
     if (mobileNavSheet) {
-        mobileNavSheet.classList.toggle('open', isMobile && isOpen);
-        mobileNavSheet.setAttribute('aria-hidden', String(!(isMobile && isOpen)));
+        mobileNavSheet.classList.toggle('open', false);
+        mobileNavSheet.setAttribute('aria-hidden', 'true');
     }
 
     if (sidebar) {
-        sidebar.classList.toggle('open', !isMobile && isOpen);
+        sidebar.classList.toggle('open', isMobile && isOpen);
     }
 
     if (sidebarBackdrop) {
-        sidebarBackdrop.classList.toggle('open', !isMobile && isOpen);
+        sidebarBackdrop.classList.toggle('open', isMobile && isOpen);
     }
 
-    document.body.style.overflow = isOpen ? 'hidden' : '';
+    document.body.style.overflow = isMobile && isOpen ? 'hidden' : '';
 }
 
 function setActiveNavigation(section) {

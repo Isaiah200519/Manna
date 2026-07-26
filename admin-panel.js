@@ -60,6 +60,7 @@ const loginEmail = document.getElementById('loginEmail');
 const loginPassword = document.getElementById('loginPassword');
 const mobileMenuButton = document.getElementById('mobileMenuButton');
 const mobileBottomNav = document.getElementById('mobileBottomNav');
+const sidebarToggle = document.getElementById('sidebarToggle');
 const sidebar = document.getElementById('sidebar');
 const sidebarBackdrop = document.getElementById('sidebarBackdrop');
 const sidebarClose = document.getElementById('sidebarClose');
@@ -225,6 +226,9 @@ function attachEvents() {
   }
   if (sidebarBackdrop) {
     sidebarBackdrop.addEventListener('click', () => setMobileNavOpen(false));
+  }
+  if (sidebarToggle) {
+    sidebarToggle.addEventListener('click', () => setMobileNavOpen(true));
   }
   if (mobileMenuButton) {
     mobileMenuButton.addEventListener('click', () => setMobileNavOpen(true));

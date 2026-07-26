@@ -5,7 +5,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>MANNA Delivery • Partner Portal</title>
-    <meta name="theme-color" content="#071923" />
     <meta name="description"
         content="Delivery partner portal for managing pickups, routes, and customer support through MANNA." />
     <link rel="shortcut icon" href="./favicon.ico" type="image/x-icon" />
@@ -87,150 +86,76 @@
     <div id="appShell" class="app-shell hidden">
         <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
         <aside class="sidebar" id="sidebar">
-            <div class="brand-block sidebar-header">
-                <div class="brand-block__content">
-                    <img src="./images/logo/logo.svg" alt="MANNA logo" class="brand-logo" />
-                    <div>
-                        <h2>MANNA</h2>
-                        <p>Delivery</p>
+            <div class="sidebar-header">
+                <div class="logo-container">
+                    <img src="./images/logo/logo.svg" alt="MANNA logo" class="logo-img" />
+                    <div class="brand-group">
+                        <h2 class="brand-text">MANNA</h2>
+                        <p class="panel-title">Delivery</p>
                     </div>
                 </div>
-                <button class="icon-btn sidebar-close" id="sidebarClose" aria-label="Close sidebar"><svg
-                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                        <path d="M6 6l12 12M18 6L6 18" />
-                    </svg></button>
+                <button class="sidebar-close" id="sidebarClose" type="button" aria-label="Close sidebar">✕</button>
             </div>
 
-            <nav class="nav-links" aria-label="Delivery navigation">
-                <button class="nav-item active" data-section="dashboard"><span class="nav-icon"><svg viewBox="0 0 24 24"
-                            fill="none" stroke="currentColor" stroke-width="1.8">
-                            <path d="M4 10.5L12 4l8 6.5" />
-                            <path d="M6.5 10.5V20h11V10.5" />
-                        </svg></span><span>Dashboard</span></button>
-                <button class="nav-item" data-section="available"><span class="nav-icon"><svg viewBox="0 0 24 24"
-                            fill="none" stroke="currentColor" stroke-width="1.8">
-                            <path d="M7 4h10l2 2v13l-2 2H7l-2-2V6l2-2z" />
-                            <path d="M9 8h6M9 12h6M9 16h4" />
-                        </svg></span><span>Available</span></button>
-                <button class="nav-item" data-section="active"><span class="nav-icon"><svg viewBox="0 0 24 24"
-                            fill="none" stroke="currentColor" stroke-width="1.8">
-                            <path d="M5 19V9" />
-                            <path d="M12 19V5" />
-                            <path d="M19 19v-7" />
-                        </svg></span><span>Active</span></button>
-                <button class="nav-item" data-section="history"><span class="nav-icon"><svg viewBox="0 0 24 24"
-                            fill="none" stroke="currentColor" stroke-width="1.8">
-                            <path d="M12 7v5l3 2" />
-                            <path d="M12 3a9 9 0 100 18 9 9 0 000-18z" />
-                        </svg></span><span>History</span></button>
-                <button class="nav-item" data-section="restaurants"><span class="nav-icon"><svg viewBox="0 0 24 24"
-                            fill="none" stroke="currentColor" stroke-width="1.8">
-                            <path d="M5 21V8" />
-                            <path d="M19 21V5" />
-                            <path d="M5 8l7-3 7 3" />
-                            <path d="M9 21v-5h6v5" />
-                        </svg></span><span>Restaurants</span></button>
-                <button class="nav-item" data-section="notifications"><span class="nav-icon"><svg viewBox="0 0 24 24"
-                            fill="none" stroke="currentColor" stroke-width="1.8">
-                            <path d="M5 8a7 7 0 0114 0v4l2 3H3l2-3z" />
-                            <path d="M10 19a2 2 0 004 0" />
-                        </svg></span><span>Notifications</span></button>
-                <button class="nav-item" data-section="profile"><span class="nav-icon"><svg viewBox="0 0 24 24"
-                            fill="none" stroke="currentColor" stroke-width="1.8">
-                            <path d="M12 12a4 4 0 100-8 4 4 0 000 8z" />
-                            <path d="M4 20a8 8 0 0116 0" />
-                        </svg></span><span>Profile</span></button>
-                <button class="nav-item" data-section="settings"><span class="nav-icon"><svg viewBox="0 0 24 24"
-                            fill="none" stroke="currentColor" stroke-width="1.8">
-                            <circle cx="12" cy="12" r="3" />
-                            <path
-                                d="M19 12a7 7 0 00-.1-1l2.2-1.7-2-3.5-2.7 1.1a7 7 0 00-1.7-1L14 3h-4l-.7 2.9a7 7 0 00-1.7 1L4.9 5.8l-2 3.5 2.2 1.7a7 7 0 000 2l-2.2 1.7 2 3.5 2.7-1.1a7 7 0 001.7 1L10 21h4l.7-2.9a7 7 0 001.7-1l2.7 1.1 2-3.5-2.2-1.7c.1-.3.1-.7.1-1z" />
-                        </svg></span><span>Settings</span></button>
-                <button class="nav-item" data-section="help"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="1.8">
-                            <path d="M12 3a9 9 0 100 18 9 9 0 000-18z" />
-                            <path d="M12 15v1" />
-                            <path d="M10 8.5a2 2 0 113.8 1.7c-.4.2-.8.6-.8 1.3v.5" />
-                        </svg></span><span>Help Center</span></button>
-            </nav>
-
-            <div class="sidebar-footer">
-                <button id="logoutButton" class="ghost-btn">Logout</button>
-            </div>
-        </aside>
-
-        <div class="mobile-nav-sheet" id="mobileNavSheet" aria-hidden="true">
-            <div class="mobile-nav-sheet__panel">
-                <div class="mobile-nav-sheet__header">
-                    <div class="brand-block">
-                        <img src="./images/logo/logo.svg" alt="MANNA logo" class="brand-logo" />
-                        <div>
-                            <h3>MANNA</h3>
-                            <p>Delivery</p>
-                        </div>
-                    </div>
-                    <button class="icon-btn" id="mobileNavClose" aria-label="Close menu"><svg viewBox="0 0 24 24"
-                            fill="none" stroke="currentColor" stroke-width="1.8">
-                            <path d="M6 6l12 12M18 6L6 18" />
-                        </svg></button>
-                </div>
-                <nav class="mobile-nav-list" aria-label="Mobile delivery navigation">
-                    <button class="nav-item mobile-nav-item active" data-section="dashboard"><span class="nav-icon"><svg
+            <nav class="sidebar-nav" aria-label="Delivery navigation">
+                <div class="nav-list nav-links">
+                    <button class="nav-item active" data-section="dashboard"><span class="nav-icon"><svg
                                 viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                                 <path d="M4 10.5L12 4l8 6.5" />
                                 <path d="M6.5 10.5V20h11V10.5" />
                             </svg></span><span>Dashboard</span></button>
-                    <button class="nav-item mobile-nav-item" data-section="available"><span class="nav-icon"><svg
-                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <button class="nav-item" data-section="available"><span class="nav-icon"><svg viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="1.8">
                                 <path d="M7 4h10l2 2v13l-2 2H7l-2-2V6l2-2z" />
                                 <path d="M9 8h6M9 12h6M9 16h4" />
                             </svg></span><span>Available</span></button>
-                    <button class="nav-item mobile-nav-item" data-section="active"><span class="nav-icon"><svg
-                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <button class="nav-item" data-section="active"><span class="nav-icon"><svg viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="1.8">
                                 <path d="M5 19V9" />
                                 <path d="M12 19V5" />
                                 <path d="M19 19v-7" />
                             </svg></span><span>Active</span></button>
-                    <button class="nav-item mobile-nav-item" data-section="history"><span class="nav-icon"><svg
-                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <button class="nav-item" data-section="history"><span class="nav-icon"><svg viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="1.8">
                                 <path d="M12 7v5l3 2" />
                                 <path d="M12 3a9 9 0 100 18 9 9 0 000-18z" />
                             </svg></span><span>History</span></button>
-                    <button class="nav-item mobile-nav-item" data-section="restaurants"><span class="nav-icon"><svg
-                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <button class="nav-item" data-section="restaurants"><span class="nav-icon"><svg viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="1.8">
                                 <path d="M5 21V8" />
                                 <path d="M19 21V5" />
                                 <path d="M5 8l7-3 7 3" />
                                 <path d="M9 21v-5h6v5" />
                             </svg></span><span>Restaurants</span></button>
-                    <button class="nav-item mobile-nav-item" data-section="notifications"><span class="nav-icon"><svg
+                    <button class="nav-item" data-section="notifications"><span class="nav-icon"><svg
                                 viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
                                 <path d="M5 8a7 7 0 0114 0v4l2 3H3l2-3z" />
                                 <path d="M10 19a2 2 0 004 0" />
                             </svg></span><span>Notifications</span></button>
-                    <button class="nav-item mobile-nav-item" data-section="profile"><span class="nav-icon"><svg
-                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <button class="nav-item" data-section="profile"><span class="nav-icon"><svg viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="1.8">
                                 <path d="M12 12a4 4 0 100-8 4 4 0 000 8z" />
                                 <path d="M4 20a8 8 0 0116 0" />
                             </svg></span><span>Profile</span></button>
-                    <button class="nav-item mobile-nav-item" data-section="settings"><span class="nav-icon"><svg
-                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <button class="nav-item" data-section="settings"><span class="nav-icon"><svg viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="1.8">
                                 <circle cx="12" cy="12" r="3" />
                                 <path
                                     d="M19 12a7 7 0 00-.1-1l2.2-1.7-2-3.5-2.7 1.1a7 7 0 00-1.7-1L14 3h-4l-.7 2.9a7 7 0 00-1.7 1L4.9 5.8l-2 3.5 2.2 1.7a7 7 0 000 2l-2.2 1.7 2 3.5 2.7-1.1a7 7 0 001.7 1L10 21h4l.7-2.9a7 7 0 001.7-1l2.7 1.1 2-3.5-2.2-1.7c.1-.3.1-.7.1-1z" />
                             </svg></span><span>Settings</span></button>
-                    <button class="nav-item mobile-nav-item" data-section="help"><span class="nav-icon"><svg
-                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <button class="nav-item" data-section="help"><span class="nav-icon"><svg viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="1.8">
                                 <path d="M12 3a9 9 0 100 18 9 9 0 000-18z" />
                                 <path d="M12 15v1" />
                                 <path d="M10 8.5a2 2 0 113.8 1.7c-.4.2-.8.6-.8 1.3v.5" />
                             </svg></span><span>Help Center</span></button>
-                </nav>
-                <div class="mobile-nav-sheet__footer">
-                    <button id="mobileLogoutButton" class="ghost-btn">Logout</button>
                 </div>
+            </nav>
+
+            <div class="sidebar-footer">
+                <button class="logout-btn" id="logoutButton" type="button">Logout</button>
             </div>
-        </div>
+        </aside>
 
         <main class="main-panel">
             <header class="topbar">
@@ -242,7 +167,9 @@
                             <p>Delivery Partner Portal</p>
                         </div>
                     </div>
-                    <span class="user-role">Delivery Partner</span>
+                    <div class="topbar-mobile-actions">
+                        <span class="user-role">Delivery Partner</span>
+                    </div>
                 </div>
                 <div class="topbar-start">
                     <div>
