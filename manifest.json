@@ -1,0 +1,23 @@
+{
+    "name": "MANNA",
+    "short_name": "MANNA",
+    "start_url": "/",
+    "scope": "/",
+    "display": "standalone",
+    "background_color": "#121212",
+    "theme_color": "#F97316",
+    "orientation": "portrait",
+    "description": "MANNA – Premium multi-role food delivery and marketplace platform.",
+    "icons": [
+        {
+            "src": "./images/logo/logo.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "./images/logo/logo.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}

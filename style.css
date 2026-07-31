@@ -37,6 +37,44 @@
     --shadow-glow: 0 0 20px var(--accent-glow);
 }
 
+html,
+body {
+    min-height: 100dvh;
+    width: 100%;
+    overflow-x: hidden;
+    margin: 0;
+    padding: 0;
+}
+
+#app,
+.main-content,
+.shell,
+.auth-screen,
+.main-panel {
+    width: 100%;
+}
+
+.shell,
+.app-shell,
+.auth-screen,
+.main-panel {
+    min-height: 100dvh;
+}
+
+html,
+body,
+.sidebar-nav,
+.main-panel {
+    -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+.sidebar-nav::-webkit-scrollbar,
+.main-panel::-webkit-scrollbar {
+    display: none;
+}
+
 /* keep the mobile header toggle visible so the sidebar can be opened on compact screens */
 @media (max-width: 767px) {
 
@@ -52,17 +90,25 @@
         display: none;
     }
 
-    body {
-        width: 95vw;
-        max-width: 95vw;
-        margin: 0 auto;
+    body.panel-page {
+        justify-content: flex-start;
+        align-items: stretch;
+        padding: 0;
     }
 
-    .auth-screen,
-    .app-shell {
+    body.panel-page .auth-screen,
+    body.panel-page .app-shell {
         width: 100%;
-        max-width: 95vw;
-        margin: 0 auto;
+        max-width: 100%;
+        margin: 0;
+        align-items: flex-start;
+    }
+
+    body.panel-page .main-panel {
+        width: 100%;
+        margin-left: 0;
+        margin-right: 0;
+        max-width: 100%;
     }
 
     .main-panel {
@@ -82,11 +128,87 @@
     font-family: var(--font-stack);
 }
 
+.pwa-install-banner,
+.pwa-install-modal,
+.pwa-install-backdrop {
+    box-sizing: border-box;
+}
+
+.pwa-install-banner {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    z-index: 1600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    background: rgba(18, 18, 18, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 18px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+    color: var(--text-main);
+}
+
+.pwa-install-banner p {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--text-main);
+    flex: 1;
+}
+
+.pwa-install-banner .pwa-action-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.pwa-install-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1600;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+}
+
+.pwa-install-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    z-index: 1550;
+}
+
+.pwa-install-modal .modal-card {
+    width: min(100%, 420px);
+    max-width: 100%;
+    padding: 24px;
+    background: rgba(18, 18, 18, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 24px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
+.pwa-install-modal .modal-card h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: var(--text-main);
+}
+
+.pwa-install-modal .modal-card p {
+    margin-bottom: 18px;
+    color: var(--text-muted);
+    line-height: 1.65;
+}
+
 html,
 body {
     max-width: 100%;
     overflow-x: hidden;
-    overflow-y: scroll;
 }
 
 html {
@@ -154,21 +276,14 @@ textarea:focus-visible {
 }
 
 ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 0;
+    height: 0;
+    display: none;
 }
 
-::-webkit-scrollbar-track {
-    background: var(--bg-main);
-}
-
+::-webkit-scrollbar-track,
 ::-webkit-scrollbar-thumb {
-    background: var(--bg-surface);
-    border-radius: var(--radius-small);
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: var(--border-color);
+    background: transparent;
 }
 
 .checkout-addon-grid {
@@ -803,6 +918,30 @@ textarea:focus-visible {
     }
 }
 
+@media (max-width: 1024px) {
+    .dashboard-hero {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .dashboard-hero .heading-3 {
+        font-size: clamp(1.7rem, 2vw, 2rem);
+    }
+
+    .hero-badge {
+        align-self: flex-start;
+        margin-top: var(--space-md);
+    }
+
+    .metric-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 @media (max-width: 640px) {
     .shell {
         padding: 14px;
@@ -1355,14 +1494,35 @@ select {
 }
 
 @media (min-width: 768px) {
+    .app-shell {
+        display: flex;
+        width: 100%;
+        min-width: 0;
+        align-items: stretch;
+    }
+
     .sidebar {
+        width: 240px;
+        flex-shrink: 0;
         transform: translateX(0) !important;
         box-shadow: none;
     }
 
-    .main-panel,
+    .main-content,
+    .main-panel {
+        flex: 1;
+        min-width: 0;
+        width: 100%;
+        max-width: none;
+        margin-left: 240px;
+    }
+
     .content {
-        margin-left: 260px;
+        flex: 1;
+        min-width: 0;
+        width: 100%;
+        margin: 0;
+        max-width: none;
     }
 
     .sidebar-toggle {

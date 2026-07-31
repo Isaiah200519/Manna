@@ -10,7 +10,7 @@
     <link rel="shortcut icon" href="./favicon.ico" type="image/x-icon" />
     <link rel="icon" href="./images/logo/logo.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./images/logo/logo.png" />
-    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="manifest" href="./manifest.json" />
     <link rel="stylesheet" href="./style.css" />
     <link rel="stylesheet" href="./restaurant.css" />
     <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
@@ -18,7 +18,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore-compat.js"></script>
 </head>
 
-<body>
+<body class="panel-page restaurant-panel">
     <div id="onboardingOverlay" class="onboarding-overlay hidden" aria-hidden="true">
         <div class="onboarding-card">
             <h2>Welcome, Restaurant Partner</h2>
@@ -516,6 +516,11 @@
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <script type="module" src="./restaurant-panel.js"></script>
     <script src="./password-toggle.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js').catch((err) => console.warn('[MANNA] SW failed:', err));
+        }
+    </script>
 </body>
 
 </html>
