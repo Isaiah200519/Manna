@@ -1525,6 +1525,25 @@ select {
         max-width: none;
     }
 
+    #content.content {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    .dashboard-shell {
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 0 var(--space-lg) !important;
+        flex: 1 1 auto !important;
+        box-sizing: border-box !important;
+    }
+
     .sidebar-toggle {
         display: none;
     }
@@ -3672,5 +3691,29 @@ button.disabled {
 @media (min-width: 1440px) {
     .container {
         max-width: 1400px;
+    }
+}
+
+@media (min-width: 768px) {
+    body.admin-panel main#content.content {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+    }
+
+    body.admin-panel .dashboard-shell {
+        display: grid !important;
+        width: 100% !important;
+        max-width: none !important;
+        min-width: 0 !important;
+        margin: 0 !important;
+        padding: 0 var(--space-lg) !important;
+        flex: 1 1 auto !important;
+        box-sizing: border-box !important;
     }
 }

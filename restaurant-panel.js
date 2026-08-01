@@ -23,6 +23,13 @@ const state = {
     supportRequests: [],
     deliveryUsers: [],
     deliveryPartnerRequests: [],
+    deliveryPersons: [],
+    deliveryPersonsFilter: { search: '', location: 'all', vehicle: 'all', rating: 'all', online: 'all' },
+    deliveryPersonsPageSize: 12,
+    deliveryPersonsLoadedCount: 0,
+    deliveryPartnersActiveTab: 'all',
+    deliveryPartnersListeners: {},
+    pendingDeliveryPartnerRemovalId: null,
     helpArticles: [],
     financialPayouts: [],
     platformFeePayments: [],
@@ -276,7 +283,13 @@ function bindEvents() {
     document.getElementById('bulkDeactivateButton')?.addEventListener('click', () => bulkUpdateMenu(false));
     document.getElementById('bulkDeleteButton')?.addEventListener('click', bulkDeleteMenu);
     document.getElementById('chatForm')?.addEventListener('submit', submitChat);
-    document.getElementById('inviteDeliveryPartnerForm')?.addEventListener('submit', handleInviteDeliveryPartner);
+    document.querySelectorAll('[data-delivery-partners-tab]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const tab = button.getAttribute('data-delivery-partners-tab');
+            state.deliveryPartnersActiveTab = tab || 'all';
+            renderDeliveryPartners();
+        });
+    });
     modalClose?.addEventListener('click', closeModal);
     modalBackdrop?.addEventListener('click', (event) => {
         if (event.target === modalBackdrop) closeModal();
@@ -712,6 +725,10 @@ function cleanupListeners() {
     [state.restaurantDocUnsubscribe, state.deliveryUsersUnsubscribe, state.menuUnsubscribe, state.ordersUnsubscribe, state.reviewsUnsubscribe, state.promotionsUnsubscribe, state.couponsUnsubscribe, state.notificationsUnsubscribe, state.settingsUnsubscribe, state.chatsUnsubscribe, state.categoriesUnsubscribe, state.orderChatUnsubscribe].forEach((unsubscribe) => {
         if (unsubscribe) unsubscribe();
     });
+    Object.values(state.deliveryPartnersListeners || {}).forEach((unsubscribe) => {
+        if (unsubscribe) unsubscribe();
+    });
+    state.deliveryPartnersListeners = {};
     state.restaurantDocUnsubscribe = null;
     state.deliveryUsersUnsubscribe = null;
     state.menuUnsubscribe = null;
@@ -734,6 +751,7 @@ function setupRealtimeListeners() {
     state.restaurantDocUnsubscribe = firestore.collection('restaurants').doc(state.restaurantId).onSnapshot((doc) => {
         state.restaurantProfile = doc.data() || {};
         renderProfileForm();
+        renderDeliveryPartners();
         updateApprovalGate();
         renderAll();
     }, (error) => {
@@ -829,6 +847,7 @@ function setupRealtimeListeners() {
     state.deliveryUsersUnsubscribe = firestore.collection('users').where('role', '==', 'delivery_person').onSnapshot((snapshot) => {
         state.deliveryUsers = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
         renderProfileForm();
+        renderDeliveryPartners();
     }, (error) => {
         console.error('[MANNA] Delivery users listener failed:', error);
     });
@@ -978,6 +997,7 @@ function renderAll() {
     renderDashboard();
     renderProfileForm();
     renderDeliveryPartnerRequests();
+    renderDeliveryPartners();
     renderHelpArticles();
     if (!state.canSell) {
         return;
@@ -1341,8 +1361,14 @@ function renderProfileForm() {
     const form = document.getElementById('profileForm');
     const profile = state.restaurantProfile || {};
     const deliveryUsersOptions = state.deliveryUsers.length ? state.deliveryUsers.map((user) => `<option value="${user.uid || user.id}">${user.displayName || user.email || 'Delivery person'}</option>`).join('') : '<option value="">No delivery people available yet</option>';
-    const assignedDeliveryPersons = (profile.deliveryPersons || []).filter(Boolean);
-    const assignedChips = assignedDeliveryPersons.length ? assignedDeliveryPersons.map((uid) => {
+    const restaurantDeliveryUids = Array.from(new Set([
+        ...(profile.deliveryPersons || []),
+        ...(state.deliveryUsers || [])
+            .filter((user) => (user.approvedRestaurants || []).includes(state.restaurantId))
+            .map((user) => user.uid || user.id)
+            .filter(Boolean)
+    ])).filter(Boolean);
+    const assignedChips = restaurantDeliveryUids.length ? restaurantDeliveryUids.map((uid) => {
         const user = state.deliveryUsers.find((entry) => (entry.uid || entry.id) === uid);
         return `<div class="chip">${user?.displayName || user?.email || uid}</div>`;
     }).join('') : '<div class="empty-state">No delivery partners assigned yet.</div>';
@@ -1765,17 +1791,142 @@ function renderDeliveryPartnerRequests() {
     });
 }
 
+function renderDeliveryPartners() {
+    const container = document.getElementById('deliveryPartnersContent');
+    if (!container) return;
+    console.log('[delivery-partners] rendering', {
+        restaurantId: state.restaurantId,
+        activeTab: state.deliveryPartnersActiveTab || 'all',
+        deliveryUsers: state.deliveryUsers || []
+    });
+    document.querySelectorAll('[data-delivery-partners-tab]').forEach((button) => {
+        button.classList.toggle('active', button.getAttribute('data-delivery-partners-tab') === (state.deliveryPartnersActiveTab || 'all'));
+    });
+
+    const allUsers = (state.deliveryUsers || [])
+        .filter((user) => user && (user.role || '').toLowerCase() === 'delivery_person')
+        .sort((a, b) => (a.displayName || a.name || a.email || '').localeCompare(b.displayName || b.name || b.email || ''));
+
+    const approvedUsers = allUsers.filter((user) => (user.approvedRestaurants || []).includes(state.restaurantId));
+    const activeTab = state.deliveryPartnersActiveTab || 'all';
+    const visibleUsers = activeTab === 'approved' ? approvedUsers : allUsers;
+    const matchingUsers = visibleUsers.filter((user) => {
+        const search = state.deliveryPersonsFilter?.search || '';
+        const haystack = `${user.displayName || user.name || ''} ${user.email || ''} ${user.phone || ''} ${user.address || ''}`.toLowerCase();
+        const matchesSearch = !search || haystack.includes(search.toLowerCase());
+        const matchesLocation = state.deliveryPersonsFilter?.location === 'all' || !state.deliveryPersonsFilter?.location || (user.area || user.location || '').toLowerCase().includes(state.deliveryPersonsFilter.location.toLowerCase());
+        const matchesVehicle = state.deliveryPersonsFilter?.vehicle === 'all' || !state.deliveryPersonsFilter?.vehicle || (user.vehicleType || '').toLowerCase() === state.deliveryPersonsFilter.vehicle.toLowerCase();
+        const matchesRating = state.deliveryPersonsFilter?.rating === 'all' || !state.deliveryPersonsFilter?.rating || (Number(user.rating || 0) >= Number(state.deliveryPersonsFilter.rating));
+        const matchesOnline = state.deliveryPersonsFilter?.online === 'all' || !state.deliveryPersonsFilter?.online || (state.deliveryPersonsFilter.online === 'online' ? Boolean(user.isOnline) : !user.isOnline);
+        return matchesSearch && matchesLocation && matchesVehicle && matchesRating && matchesOnline;
+    });
+
+    const shownUsers = matchingUsers.slice(0, state.deliveryPersonsLoadedCount || 12);
+    const hasMore = matchingUsers.length > shownUsers.length;
+
+    const renderCard = (user) => {
+        const name = user.displayName || user.name || user.email || 'Delivery person';
+        const phone = user.phone || user.mobileNumber || 'No phone provided';
+        const email = user.email || 'Not provided';
+        const location = user.area || user.location || 'Location not set';
+        const isApproved = (user.approvedRestaurants || []).includes(state.restaurantId);
+        return `
+        <div class="list-item">
+          <div class="panel-card-header">
+            <strong>${escapeHtml(name)}</strong>
+            <span class="badge">${isApproved ? 'Approved' : 'Available'}</span>
+          </div>
+          <div class="muted">Phone: ${escapeHtml(phone)}</div>
+          <div class="muted">Email: ${escapeHtml(email)}</div>
+          <div class="muted">Area: ${escapeHtml(location)}</div>
+          <div class="action-row">
+            ${isApproved ? `<button class="ghost-btn" data-delivery-partner-action="remove" data-delivery-partner-id="${escapeHtml(user.id || user.uid || '')}">Remove</button>` : `<button class="primary-btn" data-delivery-partner-action="invite" data-delivery-partner-id="${escapeHtml(user.id || user.uid || '')}">Invite</button>`}
+          </div>
+        </div>`;
+    };
+
+    const title = activeTab === 'approved' ? 'Approved partners' : 'All delivery persons';
+    const emptyMessage = activeTab === 'approved' ? 'No approved delivery partners yet.' : 'No matching delivery persons found.';
+
+    const tabContent = `
+      <div class="stack">
+        <div class="panel-card-header">
+          <h4>${title}</h4>
+          <span class="badge">${matchingUsers.length} found</span>
+        </div>
+        <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+          <label>Search<input id="deliveryPersonsSearch" value="${escapeHtml(state.deliveryPersonsFilter?.search || '')}" placeholder="Name, email, area" /></label>
+          <label>Area<select id="deliveryPersonsLocationFilter"><option value="all" ${state.deliveryPersonsFilter?.location === 'all' ? 'selected' : ''}>All</option><option value="north" ${state.deliveryPersonsFilter?.location === 'north' ? 'selected' : ''}>North</option><option value="south" ${state.deliveryPersonsFilter?.location === 'south' ? 'selected' : ''}>South</option><option value="east" ${state.deliveryPersonsFilter?.location === 'east' ? 'selected' : ''}>East</option><option value="west" ${state.deliveryPersonsFilter?.location === 'west' ? 'selected' : ''}>West</option></select></label>
+          <label>Vehicle<select id="deliveryPersonsVehicleFilter"><option value="all" ${state.deliveryPersonsFilter?.vehicle === 'all' ? 'selected' : ''}>All</option><option value="bike" ${state.deliveryPersonsFilter?.vehicle === 'bike' ? 'selected' : ''}>Bike</option><option value="car" ${state.deliveryPersonsFilter?.vehicle === 'car' ? 'selected' : ''}>Car</option><option value="van" ${state.deliveryPersonsFilter?.vehicle === 'van' ? 'selected' : ''}>Van</option></select></label>
+          <label>Rating<select id="deliveryPersonsRatingFilter"><option value="all" ${state.deliveryPersonsFilter?.rating === 'all' ? 'selected' : ''}>All</option><option value="4" ${state.deliveryPersonsFilter?.rating === '4' ? 'selected' : ''}>4+</option><option value="4.5" ${state.deliveryPersonsFilter?.rating === '4.5' ? 'selected' : ''}>4.5+</option><option value="5" ${state.deliveryPersonsFilter?.rating === '5' ? 'selected' : ''}>5</option></select></label>
+          <label>Availability<select id="deliveryPersonsOnlineFilter"><option value="all" ${state.deliveryPersonsFilter?.online === 'all' ? 'selected' : ''}>All</option><option value="online" ${state.deliveryPersonsFilter?.online === 'online' ? 'selected' : ''}>Online</option><option value="offline" ${state.deliveryPersonsFilter?.online === 'offline' ? 'selected' : ''}>Offline</option></select></label>
+        </div>
+        ${matchingUsers.length ? `
+          <div class="list-stack">
+            ${shownUsers.map(renderCard).join('')}
+          </div>
+          ${hasMore ? '<div class="modal-actions"><button class="ghost-btn" id="deliveryPersonsLoadMore">Load more</button></div>' : ''}
+        ` : `<div class="empty-state">${emptyMessage}</div>`}
+      </div>`;
+
+    container.innerHTML = tabContent;
+    document.getElementById('deliveryPersonsSearch')?.addEventListener('input', (event) => {
+        state.deliveryPersonsFilter.search = event.target.value.toLowerCase();
+        state.deliveryPersonsLoadedCount = 12;
+        renderDeliveryPartners();
+    });
+    document.getElementById('deliveryPersonsLocationFilter')?.addEventListener('change', (event) => {
+        state.deliveryPersonsFilter.location = event.target.value;
+        state.deliveryPersonsLoadedCount = 12;
+        renderDeliveryPartners();
+    });
+    document.getElementById('deliveryPersonsVehicleFilter')?.addEventListener('change', (event) => {
+        state.deliveryPersonsFilter.vehicle = event.target.value;
+        state.deliveryPersonsLoadedCount = 12;
+        renderDeliveryPartners();
+    });
+    document.getElementById('deliveryPersonsRatingFilter')?.addEventListener('change', (event) => {
+        state.deliveryPersonsFilter.rating = event.target.value;
+        state.deliveryPersonsLoadedCount = 12;
+        renderDeliveryPartners();
+    });
+    document.getElementById('deliveryPersonsOnlineFilter')?.addEventListener('change', (event) => {
+        state.deliveryPersonsFilter.online = event.target.value;
+        state.deliveryPersonsLoadedCount = 12;
+        renderDeliveryPartners();
+    });
+    document.getElementById('deliveryPersonsLoadMore')?.addEventListener('click', () => {
+        state.deliveryPersonsLoadedCount += 12;
+        renderDeliveryPartners();
+    });
+    document.querySelectorAll('[data-delivery-partner-action]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const action = button.getAttribute('data-delivery-partner-action');
+            const deliveryPersonId = button.getAttribute('data-delivery-partner-id');
+            if (action === 'invite') {
+                handleDeliveryPartnerInvite(deliveryPersonId);
+            } else if (action === 'remove') {
+                openRemoveDeliveryPartnerConfirm(deliveryPersonId);
+            }
+        });
+    });
+}
+
 function showSection(section) {
     const allowedSection = state.canSell || section === 'profile' || section === 'financials' ? section : 'profile';
     state.activeSection = allowedSection;
     setActiveNavigation(allowedSection);
     setMobileNavOpen(false);
-    sectionPanels.forEach((panel) => panel.classList.toggle('active', panel.id === `${allowedSection}Section`));
+    const expectedPanelId = allowedSection === 'delivery-partners' ? 'deliveryPartnersSection' : `${allowedSection}Section`;
+    sectionPanels.forEach((panel) => panel.classList.toggle('active', panel.id === expectedPanelId));
     if (allowedSection === 'help') {
         renderHelpSession();
     }
     if (allowedSection === 'financials') {
         renderFinancials();
+    }
+    if (allowedSection === 'delivery-partners') {
+        renderDeliveryPartners();
     }
     const titleMap = {
         dashboard: ['Dashboard', 'Track menu performance and orders in real time.'],
@@ -1853,6 +2004,75 @@ async function handleInviteDeliveryPartner(event) {
     } catch (error) {
         createToast(error.message || 'Unable to send the invitation.', 'error');
     }
+}
+
+async function handleDeliveryPartnerInvite(deliveryPersonId) {
+    if (!deliveryPersonId || !state.restaurantId) return;
+    const user = (state.deliveryUsers || []).find((entry) => (entry.id || entry.uid) === deliveryPersonId);
+    if (!user) return;
+    try {
+        await firestore.collection('deliveryPartnerRequests').add({
+            restaurantId: state.restaurantId,
+            restaurantName: state.restaurantProfile?.businessName || state.restaurantProfile?.name || '',
+            deliveryPersonUid: deliveryPersonId,
+            deliveryPersonName: user.displayName || user.name || user.email || 'Delivery person',
+            deliveryPersonEmail: user.email || '',
+            deliveryPersonPhone: user.phone || user.mobileNumber || '',
+            message: `Hello! I would like to invite you to join my delivery network.`,
+            status: 'pending',
+            createdAt: new Date(),
+            updatedAt: new Date()
+        });
+        createToast('Invite sent to the delivery person.', 'success');
+    } catch (error) {
+        createToast(error.message || 'Unable to send the invite.', 'error');
+    }
+}
+
+async function handleDeliveryPartnerRemove(deliveryPersonId) {
+    if (!deliveryPersonId || !state.restaurantId) return false;
+    const user = (state.deliveryUsers || []).find((entry) => (entry.id || entry.uid) === deliveryPersonId);
+    if (!user) return false;
+    try {
+        const currentRestaurants = Array.isArray(user.approvedRestaurants) ? user.approvedRestaurants.filter((value) => value !== state.restaurantId) : [];
+        const currentDeliveryPersons = Array.isArray(state.restaurantProfile?.deliveryPersons) ? state.restaurantProfile.deliveryPersons.filter((value) => value !== deliveryPersonId) : [];
+        await Promise.all([
+            firestore.collection('users').doc(deliveryPersonId).set({ approvedRestaurants: currentRestaurants, updatedAt: new Date() }, { merge: true }),
+            firestore.collection('restaurants').doc(state.restaurantId).set({ deliveryPersons: currentDeliveryPersons, updatedAt: new Date() }, { merge: true })
+        ]);
+        createToast('Delivery partner removed successfully.', 'success');
+        return true;
+    } catch (error) {
+        createToast(error.message || 'Unable to remove the delivery partner.', 'error');
+        return false;
+    }
+}
+
+function openRemoveDeliveryPartnerConfirm(deliveryPersonId) {
+    if (!deliveryPersonId) return;
+    state.pendingDeliveryPartnerRemovalId = deliveryPersonId;
+    const user = (state.deliveryUsers || []).find((entry) => (entry.id || entry.uid) === deliveryPersonId);
+    const name = user?.displayName || user?.name || user?.email || 'this delivery person';
+    modalTitle.textContent = 'Remove delivery partner';
+    modalBody.innerHTML = `
+      <div class="stack">
+        <p>Remove ${escapeHtml(name)} from your approved delivery partners?</p>
+        <p class="muted">This will remove the partnership for your restaurant only.</p>
+      </div>`;
+    modalActions.innerHTML = `
+      <button class="ghost-btn" id="cancelDeliveryPartnerRemoval">Cancel</button>
+      <button class="danger-btn" id="confirmDeliveryPartnerRemoval">Remove</button>`;
+    modalBackdrop.classList.remove('hidden');
+    modalBackdrop.setAttribute('aria-hidden', 'false');
+    document.getElementById('cancelDeliveryPartnerRemoval')?.addEventListener('click', closeModal);
+    document.getElementById('confirmDeliveryPartnerRemoval')?.addEventListener('click', async () => {
+        const pendingId = state.pendingDeliveryPartnerRemovalId;
+        if (!pendingId) return;
+        const didRemove = await handleDeliveryPartnerRemove(pendingId);
+        if (didRemove) {
+            closeModal();
+        }
+    });
 }
 
 async function assignDeliveryPartner() {

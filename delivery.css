@@ -198,12 +198,22 @@ textarea {
 }
 
 @media (min-width: 768px) {
+    .app-shell {
+        display: flex;
+        flex-direction: row;
+        width: 100%;
+        min-width: 0;
+        align-items: stretch;
+    }
+
     .sidebar {
         position: fixed;
         top: 0;
         left: 0;
         bottom: 0;
         align-self: flex-start;
+        width: 250px;
+        flex-shrink: 0;
         height: 100vh;
         height: 100dvh;
         max-height: 100vh;
@@ -227,6 +237,17 @@ textarea {
 
     .main-panel {
         margin-left: 250px;
+        flex: 1;
+        min-width: 0;
+        width: 100%;
+        max-width: none;
+    }
+
+    .content {
+        flex: 1;
+        min-width: 0;
+        width: 100%;
+        max-width: none;
     }
 }
 

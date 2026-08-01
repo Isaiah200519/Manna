@@ -37,6 +37,34 @@ button {
     cursor: pointer;
 }
 
+.tab-switcher {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.tab-btn {
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 8px 12px;
+}
+
+.tab-btn.active {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: white;
+    border-color: transparent;
+}
+
+.action-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+
 .auth-screen {
     min-height: 100vh;
     display: grid;
@@ -202,12 +230,22 @@ textarea {
 }
 
 @media (min-width: 768px) {
+    .app-shell {
+        display: flex;
+        flex-direction: row;
+        width: 100%;
+        min-width: 0;
+        align-items: stretch;
+    }
+
     .sidebar {
         position: fixed;
         top: 0;
         left: 0;
         bottom: 0;
         align-self: flex-start;
+        width: 270px;
+        flex-shrink: 0;
         height: 100vh;
         height: 100dvh;
         max-height: 100vh;
@@ -231,6 +269,17 @@ textarea {
 
     .main-panel {
         margin-left: 270px;
+        flex: 1;
+        min-width: 0;
+        width: 100%;
+        max-width: none;
+    }
+
+    .content {
+        flex: 1;
+        min-width: 0;
+        width: 100%;
+        max-width: none;
     }
 }
 

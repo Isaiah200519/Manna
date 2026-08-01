@@ -357,21 +357,13 @@
                 <div class="panel-card">
                     <div class="panel-card-header">
                         <h3>Delivery Partners</h3>
-                        <span class="badge">Requests & approvals</span>
+                        <span class="badge">Recruit & manage riders</span>
                     </div>
-                    <form id="inviteDeliveryPartnerForm" class="form-grid invite-form">
-                        <label class="full">Delivery partner name<input name="deliveryPersonName"
-                                placeholder="Jane Doe" /></label>
-                        <label>Email<input name="deliveryPersonEmail" type="email"
-                                placeholder="partner@example.com" /></label>
-                        <label>Phone<input name="deliveryPersonPhone" placeholder="0770123456" /></label>
-                        <label class="full">Invitation note<textarea name="message"
-                                placeholder="Add a short note for the partner"></textarea></label>
-                        <div class="modal-actions">
-                            <button class="primary-btn" type="submit">Send invite</button>
-                        </div>
-                    </form>
-                    <div id="deliveryPartnerRequestsList" class="list-stack"></div>
+                    <div class="tab-switcher" aria-label="Delivery partner tabs">
+                        <button class="tab-btn active" data-delivery-partners-tab="all">All Delivery Persons</button>
+                        <button class="tab-btn" data-delivery-partners-tab="approved">My Approved Partners</button>
+                    </div>
+                    <div id="deliveryPartnersContent"></div>
                 </div>
             </section>
 
